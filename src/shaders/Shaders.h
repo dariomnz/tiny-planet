@@ -76,24 +76,4 @@ void main() {
 }
 )GLSL";
 
-inline constexpr std::string_view kTextVert = R"GLSL(#version 300 es
-precision highp float;
-layout (location = 0) in vec2 inPix;
-uniform vec2 screenSize;
-void main() {
-    vec2 ndc = vec2(inPix.x / screenSize.x * 2.0 - 1.0,
-                    1.0 - inPix.y / screenSize.y * 2.0);
-    gl_Position = vec4(ndc, 0.0, 1.0);
-}
-)GLSL";
-
-inline constexpr std::string_view kTextFrag = R"GLSL(#version 300 es
-precision mediump float;
-out vec4 outColor;
-uniform vec3 color;
-void main() {
-    outColor = vec4(color, 1.0);
-}
-)GLSL";
-
-} // namespace shaders
+}  // namespace shaders

@@ -16,7 +16,27 @@ FetchContent_Declare(
     GIT_TAG        1.0.3
     GIT_SHALLOW    TRUE
 )
-FetchContent_MakeAvailable(glm)
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        v1.92.9b-docking
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(glm imgui)
+
+# Dear ImGui (docking branch) + GLFW + OpenGL3 backends for Emscripten/WebGL2.
+add_library(imgui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+)
+target_include_directories(imgui PUBLIC
+    "${imgui_SOURCE_DIR}"
+    "${imgui_SOURCE_DIR}/backends"
+)
 
 file(GLOB_RECURSE TINY_PLANET_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/*.cpp"
@@ -24,17 +44,13 @@ file(GLOB_RECURSE TINY_PLANET_SOURCES CONFIGURE_DEPENDS
 
 add_executable(tiny-planet ${TINY_PLANET_SOURCES})
 
-# execute_process(COMMAND em++ --cflags
-#     OUTPUT_VARIABLE EM_CFLAGS)
-
-# set_target_properties(tiny-planet PROPERTIES COMPILE_FLAGS "${EM_CFLAGS}")
-
 target_include_directories(tiny-planet PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
 )
 
 target_link_libraries(tiny-planet PRIVATE
     glm::glm
+    imgui
 )
 
 # Output .html (Emscripten generates .html + .js + .wasm)

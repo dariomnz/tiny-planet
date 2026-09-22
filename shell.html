@@ -3,41 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Planet 3D</title>
+<title>Tiny Planet</title>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
   #canvas { display: block; width: 100vw; height: 100vh; }
-  #errbox {
-    display: none; position: fixed; left: 8px; top: 8px; max-width: 90vw;
-    background: rgba(180, 20, 20, 0.92); color: #fff; font: 13px/1.4 monospace;
-    padding: 8px 10px; white-space: pre-wrap; z-index: 10;
-  }
 </style>
 </head>
 <body>
-<div id="errbox"></div>
 <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
 <script>
   var Module = {
     canvas: document.getElementById('canvas'),
     print: function (t) { console.log(t); },
-    printErr: function (t) {
-      console.error(t);
-      var b = document.getElementById('errbox');
-      b.style.display = 'block';
-      b.textContent += t + '\n';
-    }
+    printErr: function (t) { console.error(t); }
   };
-  window.addEventListener('error', function (e) {
-    var b = document.getElementById('errbox');
-    b.style.display = 'block';
-    b.textContent += (e.message || e.error) + '\n';
-  });
-  window.addEventListener('unhandledrejection', function (e) {
-    var b = document.getElementById('errbox');
-    b.style.display = 'block';
-    b.textContent += 'promise: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '\n';
-  });
 </script>
 {{{ SCRIPT }}}
 </body>
