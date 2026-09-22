@@ -2,8 +2,8 @@
 
 #include <GLES3/gl3.h>
 
+#include <cstddef>
 #include <glm/glm.hpp>
-#include <vector>
 
 #include "gl/Buffer.h"
 #include "gl/Program.h"
@@ -18,10 +18,12 @@ class EntityRenderer {
     EntityRenderer();
 
     // Sets projView/playerPos/curveK shared by all draws in the frame.
-    void begin(const glm::mat4 &projView, const glm::vec2 &playerPos, float curveK) const;
-    void drawPlayer(const glm::mat4 &model, const glm::vec3 &color) const;
-    void drawNose(const glm::mat4 &model, const glm::vec3 &color) const;
-    void drawProjectiles(const std::vector<Projectile> &items, const glm::vec3 &color) const;
+     void begin(const glm::mat4 &projView, const glm::vec2 &playerPos, float curveK) const;
+     void drawPlayer(const glm::mat4 &model, const glm::vec3 &color) const;
+     void drawNose(const glm::mat4 &model, const glm::vec3 &color) const;
+     void drawProjectiles(const Projectile *items, std::size_t count, const glm::vec3 &color) const;
+     void drawEnemies(const glm::vec2 *positions, const float *scales, std::size_t count,
+                      const glm::vec3 &color) const;
 
    private:
     Program m_prog;

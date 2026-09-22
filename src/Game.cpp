@@ -37,7 +37,7 @@ Game::Game() : m_window(config::kInitialFbW, config::kInitialFbH, "Planet 3D"), 
         std::cout << "GLSL_VERSION: " << (sl ? sl : "<null>") << std::endl;
     }
 
-    std::cout << "Controls: Hub = mouse, WASD = move, click = fire, "
+    std::cout << "Controls: Hub = mouse, WASD = move, hold-click = fire, "
                  "P = pause, L = draft, K = die\n";
 
     m_prevKeys.fill(false);
@@ -60,9 +60,14 @@ void Game::tick() {
 void Game::startRun() {
     m_player = Player{};
     m_projectiles = ProjectileSystem{};
+    m_enemies.clear();
     m_run = RunStats{};
-    m_run.maxHp = 100.0f + 10.0f * m_meta.levels[3];
+    m_run.maxHp = config::kHpBase + 10.0f * m_meta.levels[3];
     m_run.hp = m_run.maxHp;
+    m_damage = config::kDmgBase * (1.0f + 0.02f * m_meta.levels[0]);
+    m_fireRate = config::kFireRateBase;
+    m_fireTimer = 0.0f;
+    m_invulnTimer = 0.0f;
     m_state = UiState::Run;
     // Called from a UI gesture (button/Enter): piggybacks its transient
     // activation so the lock often engages without an extra click.
@@ -228,10 +233,17 @@ void Game::update(float dt) {
 
     // Locked pointer = game owns every click, even if the virtual cursor
     // drifted over an ImGui window (same rule as InputManager).
-    const bool fireClick = m_input.consumeFireRequest();
+    // M1: hold-click fires with fireRate (docs 01-overview / 07-roadmap).
+    m_fireTimer -= dt;
     const bool uiOwnsClick = !m_input.isCaptured() && ImGuiLayer::wantsMouse();
-    if (fireClick && !uiOwnsClick) m_projectiles.spawn(m_player.pos(), m_camera.yaw);
+    if (m_input.isFiring() && !uiOwnsClick && m_fireTimer <= 0.0f) {
+        m_projectiles.spawn(m_player.pos(), m_camera.yaw, m_damage);
+        m_fireTimer = 1.0f / m_fireRate;
+    }
     m_projectiles.update(dt);
+    m_enemies.update(dt, m_player.pos());
+    collideBulletsEnemies();
+    collideEnemiesPlayer(dt);
 
     m_camera.update(dt, m_player.pos());
 
@@ -255,6 +267,52 @@ void Game::update(float dt) {
     }
 }
 
+void Game::collideBulletsEnemies() {
+    // 2D circle collisions (xy only, curved z is visual). O(n*m) is fine
+    // for n,m < 300 at 60fps (see 05-architecture). No allocs.
+    auto *bullets = m_projectiles.data();
+    auto *enemies = m_enemies.data();
+    for (std::size_t bi = 0; bi < m_projectiles.size();) {
+        const glm::vec2 bp(bullets[bi].pos.x, bullets[bi].pos.y);
+        bool consumed = false;
+        for (std::size_t ei = 0; ei < m_enemies.size(); ++ei) {
+            const glm::vec2 d = bp - enemies[ei].pos;
+            const float rr = config::kProjRadius + enemies[ei].radius;
+            if (glm::dot(d, d) < rr * rr) {
+                enemies[ei].hp -= bullets[bi].damage;
+                consumed = true;
+                if (enemies[ei].hp <= 0.0f) {
+                    m_enemies.killAt(ei);
+                    enemies = m_enemies.data();  // swap-remove moved memory
+                    m_run.fragmentsEarned += 1;  // M1 visible reward (M4: real economy)
+                }
+                break;  // one bullet hits one enemy
+            }
+        }
+        if (consumed) {
+            m_projectiles.killAt(bi);  // swapped-in bullet still needs testing
+            bullets = m_projectiles.data();
+        } else {
+            ++bi;
+        }
+    }
+}
+
+void Game::collideEnemiesPlayer(float dt) {
+    m_invulnTimer = std::max(0.0f, m_invulnTimer - dt);
+    if (m_invulnTimer > 0.0f) return;
+    const glm::vec2 pp = m_player.pos();
+    for (std::size_t i = 0; i < m_enemies.size(); ++i) {
+        const Enemy &e = m_enemies.data()[i];
+        const glm::vec2 d = pp - e.pos;
+        if (glm::dot(d, d) < config::kChaserContactRadius * config::kChaserContactRadius) {
+            m_run.hp -= e.damage;
+            m_invulnTimer = config::kPlayerInvulnSec;
+            break;  // one hit per iframe window
+        }
+    }
+}
+
 void Game::renderScene() {
     const int fbW = m_window.fbWidth();
     const int fbH = m_window.fbHeight();
@@ -272,13 +330,25 @@ void Game::renderScene() {
     m_planet.draw(proj * view, m_player.pos(), {snapX, snapY}, m_curveK, m_fill, {0.2f, 1.0f, 0.4f},
                   config::kFogDensity);
 
-    // Player + nose + projectiles (same curved shader).
+    // Player + nose + projectiles + enemies (same curved shader).
     m_entities.begin(proj * view, m_player.pos(), m_curveK);
     glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(m_player.pos().x, m_player.pos().y, 0.0f));
     model = glm::rotate(model, m_player.yaw(), glm::vec3(0.0f, 0.0f, 1.0f));
     m_entities.drawPlayer(model, {1.0f, 0.25f, 0.2f});
     m_entities.drawNose(model, {1.0f, 0.85f, 0.2f});
-    m_entities.drawProjectiles(m_projectiles.list(), {0.3f, 0.8f, 1.0f});
+    m_entities.drawProjectiles(m_projectiles.data(), m_projectiles.size(), {0.3f, 0.8f, 1.0f});
+    // Enemies as red cubes (stack arrays: no heap allocs per frame).
+    {
+        const std::size_t n = m_enemies.size();
+        // Fixed cap 256: bounded stack copies, refreshed every frame.
+        glm::vec2 epos[256];
+        float escale[256];
+        for (std::size_t i = 0; i < n; ++i) {
+            epos[i] = m_enemies.data()[i].pos;
+            escale[i] = 0.8f;
+        }
+        if (n > 0) m_entities.drawEnemies(epos, escale, n, {1.0f, 0.15f, 0.15f});
+    }
 }
 
 void Game::drawUi() {

@@ -52,6 +52,8 @@ void InputManager::releaseCapture() {
     m_wantCapture = false;
     m_externalUnlockPending = false;
     m_locked = false;
+    m_firingHeld = false;
+    m_fireRequested = false;
     m_lookDX = 0.0;
     m_lookDY = 0.0;
     if (m_window) glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -70,6 +72,7 @@ void InputManager::onPointerLockChanged(bool active) {
     if (!active) {
         m_lookDX = 0.0;
         m_lookDY = 0.0;
+        m_firingHeld = false;
         // ESC exits the lock at browser level and never reaches Game as a
         // key press, so flag it: Game auto-pauses, which is what calls
         // releaseCapture(). Intentional menu transitions already cleared
@@ -88,6 +91,7 @@ void InputManager::onPointerLockChanged(bool active) {
 
 void InputManager::onPointerLockFailed() {
     m_locked = false;
+    m_firingHeld = false;
     m_lookDX = 0.0;
     m_lookDY = 0.0;
     // Same reason: stay DISABLED + retry listener, just report unlocked.
@@ -127,11 +131,17 @@ void InputManager::onScroll(GLFWwindow *win, double /*xoff*/, double yoff) {
 void InputManager::onMouseButton(GLFWwindow *win, int button, int action, int /*mods*/) {
     auto *self = s_active;
     (void)win;
-    if (!self || button != GLFW_MOUSE_BUTTON_LEFT || action != GLFW_PRESS) return;
+    if (!self || button != GLFW_MOUSE_BUTTON_LEFT) return;
+    if (action == GLFW_RELEASE) {
+        self->m_firingHeld = false;
+        return;
+    }
+    if (action != GLFW_PRESS) return;
     if (self->m_locked) {
         // Locked: every click is game fire, even if the virtual cursor
         // drifted over an ImGui window.
         self->m_fireRequested = true;
+        self->m_firingHeld = true;
         return;
     }
     // Not captured: an explicit click on empty scene (no ImGui under the

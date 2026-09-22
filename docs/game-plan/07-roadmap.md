@@ -1,11 +1,11 @@
 # 07 — Roadmap by milestones
 
 ## M1 — Minimal playable loop (1-2 sessions)
-- [ ] Hold-click fires with `fireRate` (change in `mouse_button_callback` + `frame()`).
-- [ ] Player bullet pool 256 (migrate current `vector`).
-- [ ] 1 Chaser enemy (pool 256, chase AI, contact damage).
-- [ ] Player HP + death + run restart + timer in HUD.
-- [ ] Verify: 60 fps, 2D collisions, no per-frame allocs.
+- [x] Hold-click fires with `fireRate` (`Input::isFiring/m_firingHeld` + `Game::m_fireTimer` in `update()`).
+- [x] Player bullet pool 256 (fixed `array<Projectile,256>` + swap-remove, skip when full).
+- [x] 1 Chaser enemy (`world/Enemies.h/.cpp` pool 256, chase AI, contact damage + iframes).
+- [x] Player HP + death + run restart + timer in HUD (`startRun` resets, `collideEnemiesPlayer`, `gameOver`, `RunStats.timerSec`).
+- [x] Verify: build passes (`emcmake` + `cmake --build`); 2D circle collisions `dist2D < r1+r2`; no per-frame allocs (fixed pools, stack-only render copies).
 - **Out:** you can kill and die. No XP yet.
 
 ## M2 — XP and draft
@@ -35,6 +35,10 @@
 ## Suggested code order
 `Config.h` → bullet pool → `g_firing` → Chaser → HP/death → gems/XP → DOM draft →
 Director → enemy bullets → Meta → rest.
+(M1 done in this order. `g_firing` lives as `InputManager::m_firingHeld`/`isFiring()`.
+M1 spawner is a minimal inline director in `EnemySystem::trySpawn`; M3 replaces it
+with the real `Director`. Kill reward is a temporary +1 fragment/kill; M4 wires the
+real time/kill/boss economy.)
 
 ## "Ready to balance" bar
 15-min run at stable 60 fps with 200+ bullets on screen and draft working.

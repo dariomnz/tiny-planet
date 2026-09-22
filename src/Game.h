@@ -10,6 +10,7 @@
 #include "platform/Window.h"
 #include "ui/ImGuiLayer.h"
 #include "ui/UiState.h"
+#include "world/Enemies.h"
 #include "world/Player.h"
 #include "world/Projectiles.h"
 
@@ -34,6 +35,8 @@ class Game {
     void applyDraft(int idx);
     void togglePause();
     void gameOver();
+    void collideBulletsEnemies();
+    void collideEnemiesPlayer(float dt);
 
     GlfwInit m_glfw;
     Window m_window;
@@ -41,6 +44,7 @@ class Game {
     InputManager m_input;
     Player m_player;
     ProjectileSystem m_projectiles;
+    EnemySystem m_enemies;
     PlanetRenderer m_planet;
     EntityRenderer m_entities;
     ImGuiLayer m_imgui;
@@ -53,6 +57,10 @@ class Game {
 
     float m_fill = 0.0f;
     float m_curveK = 0.02f;
+    float m_fireTimer = 0.0f;   // hold-click pacing: 1 / fireRate
+    float m_invulnTimer = 0.0f;  // iframes after a contact hit
+    float m_damage = 10.0f;      // per-run basic damage (M2: upgrades)
+    float m_fireRate = 2.0f;     // per-run shots/sec (M2: upgrades)
     double m_lastTime = 0.0;
     double m_fpsLast = 0.0;
     int m_fpsFrames = 0;

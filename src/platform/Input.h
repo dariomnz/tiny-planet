@@ -70,9 +70,12 @@ class InputManager {
     // Returns false when no motion is pending.
     bool consumeLookDelta(double &dx, double &dy) noexcept;
 
-    [[nodiscard]] bool isCaptured() const noexcept { return m_locked; }
-    // true once per click (consumed by Game to fire).
-    [[nodiscard]] bool consumeFireRequest() noexcept;
+     [[nodiscard]] bool isCaptured() const noexcept { return m_locked; }
+     // True while the left button is held down AND locked (game owns clicks).
+     // Used for hold-to-fire with fireRate. False in menus / unlocked.
+     [[nodiscard]] bool isFiring() const noexcept { return m_locked && m_firingHeld; }
+     // true once per click (consumed by Game to fire).
+     [[nodiscard]] bool consumeFireRequest() noexcept;
 
    private:
     static void onScroll(GLFWwindow *win, double xoff, double yoff);
@@ -86,7 +89,8 @@ class InputManager {
     bool m_wantCapture = false;
     bool m_externalUnlockPending = false;
     bool m_captureAllowed = false;
-    double m_lookDX = 0.0;
-    double m_lookDY = 0.0;
-    bool m_fireRequested = false;
+     double m_lookDX = 0.0;
+     double m_lookDY = 0.0;
+     bool m_fireRequested = false;
+     bool m_firingHeld = false;
 };

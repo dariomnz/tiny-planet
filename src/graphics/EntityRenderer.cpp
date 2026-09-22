@@ -46,13 +46,29 @@ void EntityRenderer::drawNose(const glm::mat4 &model, const glm::vec3 &color) co
     glDrawArrays(GL_TRIANGLES, 0, m_noseCount);
 }
 
-void EntityRenderer::drawProjectiles(const std::vector<Projectile> &items, const glm::vec3 &color) const {
+void EntityRenderer::drawProjectiles(const Projectile *items, std::size_t count, const glm::vec3 &color) const {
     m_prog.set("color", color);
     m_projVao.bind();
-    for (const Projectile &p : items) {
-        const glm::mat4 m = glm::translate(glm::mat4(1.0f), p.pos);
+    for (std::size_t i = 0; i < count; ++i) {
+        const glm::mat4 m = glm::translate(glm::mat4(1.0f), items[i].pos);
         m_prog.set("model", m);
         glDrawArrays(GL_TRIANGLES, 0, m_projCount);
+    }
+    VertexArray::unbind();
+}
+
+void EntityRenderer::drawEnemies(const glm::vec2 *positions, const float *scales, std::size_t count,
+                                 const glm::vec3 &color) const {
+    // Reuses the player cube mesh: only color/scale differ (M1: red chasers).
+    // Same curved shader, no per-frame allocs.
+    m_prog.set("color", color);
+    m_playerVao.bind();
+    for (std::size_t i = 0; i < count; ++i) {
+        glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(positions[i].x, positions[i].y, 0.0f));
+        const float s = scales ? scales[i] : 1.0f;
+        m = glm::scale(m, glm::vec3(s, s, s));
+        m_prog.set("model", m);
+        glDrawArrays(GL_TRIANGLES, 0, m_playerCount);
     }
     VertexArray::unbind();
 }

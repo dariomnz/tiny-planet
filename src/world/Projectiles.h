@@ -1,25 +1,31 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <glm/glm.hpp>
-#include <vector>
 
 struct Projectile {
     glm::vec3 pos{0.0f};
     glm::vec3 vel{0.0f};
     float life = 0.0f;
+    float damage = 0.0f;
 };
 
-// Cubes fired by the player: straight motion + expiry.
-// Recycles the oldest one past the cap (anti click-spam).
+// Player bullets: fixed pool, zero per-frame allocs.
+// Active bullets are items[0, count). Removal is swap-remove.
+// When the pool is full, spawn() skips (see 04-enemies-scaling.md).
 class ProjectileSystem {
-   public:
-    void spawn(const glm::vec2 &playerPos, float yaw);
-    void update(float dt);
+    public:
+     void spawn(const glm::vec2 &playerPos, float yaw, float damage);
+     void update(float dt);
+     void killAt(std::size_t i);  // swap-remove, order not preserved
 
-    [[nodiscard]] const std::vector<Projectile> &list() const noexcept { return m_items; }
-    [[nodiscard]] std::size_t size() const noexcept { return m_items.size(); }
+     [[nodiscard]] const Projectile *data() const noexcept { return m_items.data(); }
+     [[nodiscard]] Projectile *data() noexcept { return m_items.data(); }
+     [[nodiscard]] std::size_t size() const noexcept { return m_count; }
+     [[nodiscard]] bool full() const noexcept { return m_count >= m_items.size(); }
 
-   private:
-    std::vector<Projectile> m_items;
+    private:
+     std::array<Projectile, 256> m_items{};
+     std::size_t m_count = 0;
 };
