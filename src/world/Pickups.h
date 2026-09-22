@@ -13,13 +13,13 @@ struct Gem {
 // M2: XP gems. Fixed pool, zero per-frame allocs.
 // Active gems are m_items[0, m_count). Removal is swap-remove.
 // When the pool is full, spawn() skips (same rule as bullets/enemies).
-// Magnet: gems inside kGemMagnetRadius fly toward the player;
+// Magnet: gems inside magnetRadius (Boots-scaled) fly toward the player;
 // out-of-range gems despawn after kGemDespawnSec.
 class GemSystem {
    public:
     void clear();
     void spawn(const glm::vec2 &pos, int value);
-    void update(float dt, const glm::vec2 &playerPos);
+    void update(float dt, const glm::vec2 &playerPos, float magnetRadius);
     void collectAt(std::size_t i);  // swap-remove, order not preserved
 
     [[nodiscard]] const Gem *data() const noexcept { return m_items.data(); }

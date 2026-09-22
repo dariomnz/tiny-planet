@@ -15,13 +15,12 @@ void GemSystem::spawn(const glm::vec2 &pos, int value) {
     m_items[m_count++] = g;
 }
 
-void GemSystem::update(float dt, const glm::vec2 &playerPos) {
-    const float magnetR = config::kGemMagnetRadius;
+void GemSystem::update(float dt, const glm::vec2 &playerPos, float magnetRadius) {
     for (std::size_t i = 0; i < m_count;) {
         Gem &g = m_items[i];
         const glm::vec2 to = playerPos - g.pos;
         const float d2 = glm::dot(to, to);
-        if (d2 < magnetR * magnetR && d2 > 1e-8f) {
+        if (d2 < magnetRadius * magnetRadius && d2 > 1e-8f) {
             const float d = std::sqrt(d2);
             g.pos += (to / d) * (config::kGemMagnetSpeed * dt);
         }

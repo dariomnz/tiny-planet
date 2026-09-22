@@ -9,6 +9,7 @@ struct Projectile {
     glm::vec3 vel{0.0f};
     float life = 0.0f;
     float damage = 0.0f;
+    bool homing = false;  // M5: auto-missiles steer toward the nearest enemy
 };
 
 // Player bullets: fixed pool, zero per-frame allocs.

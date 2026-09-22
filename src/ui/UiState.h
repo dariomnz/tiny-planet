@@ -17,13 +17,18 @@ struct RunStats {
     float xp = 0.0f;
     float xp01 = 0.0f;
     float bossHp01 = -1.0f;  // M3: Boss HP bar, negative = hidden
+    int bossTier = 0;        // M5: 5/10/15 while a boss lives, else 0
     int kills = 0;
     int bossKills = 0;
+    int elitesKilled = 0;  // M5
     int fragsTime = 0;
     int fragsKills = 0;
     int fragsBoss = 0;
     int fragsDraft = 0;
-    int fragmentsEarned = 0;  // total = time + kills + boss + draft
+    int fragsElite = 0;    // M5: +2 per elite
+    int fragsVictory = 0;  // M5: +100 final-boss bonus
+    bool won = false;      // M5: final boss killed
+    int fragmentsEarned = 0;  // total = time + kills + boss + draft + victory
     int fps = 60;
     float workMs = 0.0f;
 };

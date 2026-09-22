@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <functional>
 
 #include "game/Meta.h"
@@ -22,5 +23,15 @@ void drawHub(Meta &meta, const std::function<void()> &onStart, const std::functi
 void drawDraft(const std::array<DraftOption, 3> &opts, const std::function<void(int)> &onPick);
 void drawPause(const std::function<void()> &onResume, const std::function<void()> &onQuit);
 void drawGameOver(const RunStats &run, const std::function<void()> &onRetry, const std::function<void()> &onHub);
+
+// M5: off-screen enemy indicators. Positions are NDC clamped to the screen
+// border (computed in Game::renderScene, drawn on the ImGui foreground list).
+struct EdgeMarker {
+    float x = 0.0f;
+    float y = 0.0f;
+    bool boss = false;
+    bool elite = false;
+};
+void drawEdgeArrows(const EdgeMarker *markers, std::size_t count);
 
 }  // namespace ui

@@ -5,10 +5,13 @@
 #include "Config.h"
 #include "world/EnemyBullets.h"
 
-Enemy EnemySystem::make(EnemyType type, const glm::vec2 &pos) {
+Enemy EnemySystem::make(EnemyType type, const glm::vec2 &pos, float hpMult, float dmgMult, bool elite,
+                        int bossTier) {
     Enemy e;
     e.pos = pos;
     e.type = type;
+    e.elite = elite;
+    e.bossTier = bossTier;
     switch (type) {
         case EnemyType::Swarm:
             e.hp = e.maxHp = config::kSwarmHp;
@@ -30,15 +33,30 @@ Enemy EnemySystem::make(EnemyType type, const glm::vec2 &pos) {
             e.damage = config::kTankDamage;
             e.radius = config::kTankRadius;
             break;
-        case EnemyType::Boss:
-            e.hp = e.maxHp = config::kBoss5Hp;
-            e.speed = config::kBoss5Speed;
-            e.damage = config::kBoss5Contact;
-            e.bulletDamage = config::kBoss5Bullet;
-            e.radius = config::kBoss5Radius;
-            e.fireTimer = config::kBossFanCd;
-            e.auxTimer = config::kBossRingCd;
+        case EnemyType::Spinner:
+            e.hp = e.maxHp = config::kSpinnerHp;
+            e.speed = config::kSpinnerSpeed;
+            e.damage = config::kSpinnerBullet;  // fallback on touch
+            e.bulletDamage = config::kSpinnerBullet;
+            e.radius = config::kSpinnerRadius;
+            e.fireTimer = config::kSpinnerFireCd;
+            e.spiral = 0.0f;
             break;
+        case EnemyType::Boss: {
+            const int idx = (bossTier >= 15) ? 2 : (bossTier >= 10 ? 1 : 0);
+            e.hp = e.maxHp = config::kBossHp[idx];
+            e.speed = config::kBossSpeed;
+            e.damage = config::kBossContact;
+            e.bulletDamage = config::kBossBullet;
+            e.radius = config::kBossRadius;
+            // Tier patterns: 5 = fan(3s)+ring(4s); 10 = fan+ring every 4s;
+            // 15 = double spiral + homing missiles.
+            e.fireTimer = (bossTier >= 15) ? config::kBoss15SpiralCd : (bossTier >= 10 ? 4.0f : 3.0f);
+            e.auxTimer = (bossTier >= 15) ? config::kBossMissileCd : (bossTier >= 10 ? 2.0f : 4.0f);
+            e.spiral = 0.0f;
+            e.spiral2 = 0.0f;
+            break;
+        }
         case EnemyType::Chaser:
         default:
             e.hp = e.maxHp = config::kChaserHp;
@@ -47,6 +65,14 @@ Enemy EnemySystem::make(EnemyType type, const glm::vec2 &pos) {
             e.radius = config::kChaserRadius;
             break;
     }
+    if (elite && type != EnemyType::Boss) {
+        e.hp = e.maxHp = e.hp * config::kEliteHpMult;
+        e.radius *= 1.3f;
+    }
+    e.hp *= hpMult;
+    e.maxHp *= hpMult;
+    e.damage *= dmgMult;
+    e.bulletDamage *= dmgMult;
     return e;
 }
 
@@ -62,12 +88,19 @@ namespace {
 
 // Aimed shot from `from` toward `target` at `speed`.
 void fireAimed(EnemyBulletSystem &bullets, const glm::vec2 &from, const glm::vec2 &target, float speed,
-               float damage) {
+               float damage, bool homing = false) {
     const glm::vec2 to = target - from;
     const float d2 = glm::dot(to, to);
     if (d2 < 1e-8f) return;
     const glm::vec2 dir = to / std::sqrt(d2);
-    bullets.spawn(from, dir * speed, damage);
+    bullets.spawn(from, dir * speed, damage, homing);
+}
+
+void fireRing(EnemyBulletSystem &bullets, const glm::vec2 &from, int n, float speed, float damage) {
+    for (int k = 0; k < n; ++k) {
+        const float a = 6.2831853f * static_cast<float>(k) / static_cast<float>(n);
+        bullets.spawn(from, glm::vec2(std::cos(a), std::sin(a)) * speed, damage);
+    }
 }
 
 bool heavy(EnemyType t) { return t == EnemyType::Tank || t == EnemyType::Boss; }
@@ -76,6 +109,7 @@ bool heavy(EnemyType t) { return t == EnemyType::Tank || t == EnemyType::Boss; }
 
 void EnemySystem::update(float dt, const glm::vec2 &playerPos, EnemyBulletSystem &bullets, float timeMin) {
     const float bSpeed = config::bulletSpeed(timeMin);
+    const int spiralArms = timeMin >= config::kSpinnerLateMin ? config::kSpinnerArmsLate : config::kSpinnerArms;
 
     for (std::size_t i = 0; i < m_count; ++i) {
         Enemy &e = m_items[i];
@@ -105,33 +139,73 @@ void EnemySystem::update(float dt, const glm::vec2 &playerPos, EnemyBulletSystem
                 }
                 break;
             }
-            case EnemyType::Boss: {
-                // Slow chase + two patterns: aimed fan + full ring (04).
+            case EnemyType::Spinner: {
+                // M5: slow chase + rotating spiral volley (04).
                 e.pos += dir * (e.speed * dt);
+                e.spiral += config::kSpinnerTurn * dt;
                 e.fireTimer -= dt;
                 if (e.fireTimer <= 0.0f) {
-                    e.fireTimer = config::kBossFanCd;
-                    if (!bullets.full()) {
-                        // +1 bullet in fans every 3 min (04 pattern extras).
-                        int n = config::kBossFanCount + static_cast<int>(timeMin / 3.0f);
-                        if (n > 9) n = 9;
-                        const float base = std::atan2(dir.y, dir.x);
-                        for (int k = 0; k < n; ++k) {
-                            const float a = base + (k - (n - 1) * 0.5f) * config::kBossFanSpread;
+                    e.fireTimer = config::kSpinnerFireCd;
+                    if (d < config::kEnemyFireRange && !bullets.full()) {
+                        for (int k = 0; k < spiralArms; ++k) {
+                            const float a = e.spiral + 6.2831853f * k / spiralArms;
                             bullets.spawn(e.pos, glm::vec2(std::cos(a), std::sin(a)) * bSpeed,
                                           e.bulletDamage);
                         }
                     }
                 }
-                e.auxTimer -= dt;
-                if (e.auxTimer <= 0.0f) {
-                    e.auxTimer = config::kBossRingCd;
-                    if (!bullets.full()) {
-                        for (int k = 0; k < config::kBossRingCount; ++k) {
-                            const float a = 6.2831853f * k / config::kBossRingCount;
-                            bullets.spawn(e.pos, glm::vec2(std::cos(a), std::sin(a)) * bSpeed,
-                                          e.bulletDamage);
+                break;
+            }
+            case EnemyType::Boss: {
+                e.pos += dir * (e.speed * dt);
+                if (e.bossTier >= 15) {
+                    // M5: double counter-rotating spiral + slow homing missiles.
+                    e.spiral += config::kSpinnerTurn * dt;
+                    e.spiral2 -= config::kSpinnerTurn * dt;
+                    e.fireTimer -= dt;
+                    if (e.fireTimer <= 0.0f) {
+                        e.fireTimer = config::kBoss15SpiralCd;
+                        if (!bullets.full()) {
+                            for (int k = 0; k < 2; ++k) {
+                                const float a1 = e.spiral + 3.14159265f * k;
+                                const float a2 = e.spiral2 + 3.14159265f * k;
+                                bullets.spawn(e.pos, glm::vec2(std::cos(a1), std::sin(a1)) * bSpeed,
+                                              e.bulletDamage);
+                                bullets.spawn(e.pos, glm::vec2(std::cos(a2), std::sin(a2)) * bSpeed,
+                                              e.bulletDamage);
+                            }
                         }
+                    }
+                    e.auxTimer -= dt;
+                    if (e.auxTimer <= 0.0f) {
+                        e.auxTimer = config::kBossMissileCd;
+                        if (!bullets.full())
+                            fireAimed(bullets, e.pos, playerPos, config::kBossMissileSpeed, e.bulletDamage,
+                                      true /*homing*/);
+                    }
+                } else {
+                    // Tier 5/10: aimed fan + full ring (04). Tier 10 runs both
+                    // every 4s (ring staggered by 2s).
+                    e.fireTimer -= dt;
+                    if (e.fireTimer <= 0.0f) {
+                        e.fireTimer = (e.bossTier >= 10) ? config::kBoss10FanCd : 3.0f;
+                        if (!bullets.full()) {
+                            // +1 bullet in fans every 3 min (04 pattern extras).
+                            int n = config::kBossFanCount + static_cast<int>(timeMin / 3.0f);
+                            if (n > 9) n = 9;
+                            const float base = std::atan2(dir.y, dir.x);
+                            for (int k = 0; k < n; ++k) {
+                                const float a = base + (k - (n - 1) * 0.5f) * config::kBossFanSpread;
+                                bullets.spawn(e.pos, glm::vec2(std::cos(a), std::sin(a)) * bSpeed,
+                                              e.bulletDamage);
+                            }
+                        }
+                    }
+                    e.auxTimer -= dt;
+                    if (e.auxTimer <= 0.0f) {
+                        e.auxTimer = (e.bossTier >= 10) ? config::kBoss10RingCd : 4.0f;
+                        if (!bullets.full()) fireRing(bullets, e.pos, config::kBossRingCount, bSpeed,
+                                                      e.bulletDamage);
                     }
                 }
                 break;

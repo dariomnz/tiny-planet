@@ -44,9 +44,22 @@
 - **Out:** it is incremental now.
 
 ## M5 — Content and balance
-- [ ] Spinner + elites + Boss-10/15 + full 10 upgrades + slot2/revive.
-- [ ] Tune with the 02/03/04 formulas. Edge arrows for off-screen enemies.
-- [ ] Perf test with full caps on large canvas.
+- [x] Spinner (spiral volley, 2 arms → 3 from min 8, slow chase) + elites
+  (5% from min 5: x6 HP, x5 XP, +2 frags, yellow) + Boss-10 (fan+ring / 4s) /
+  Boss-15 (double counter-rotating spiral + slow homing missiles) + full 10
+  upgrades (spread/Heavy/orbitals/missiles/boots/vitality/crit) + slot2 (2nd
+  skill cap) / revive (50% once per run).
+- [x] Tuned with the 02/03/04 formulas: `hpMult(t)`/`dmgMult(t)` on every normal
+  spawn (bosses take NG+ only), `bulletSpeed`/`targetAlive`/`spawnInterval`/
+  `xpNeed` live, boss tiers 15/40/100 + victory +100, NG+ x1.5/x1.2/x1.5.
+  Expected DPS ~17x at full build (2 x 1.76 x 4 shots x 1.25 crit + skills).
+  Edge arrows for off-screen enemies (boss red > elite yellow > white, 64 cap;
+  fixed: markers replicate the shader curve drop `curveK*|rel|^2`, parity-proven
+  by a native test — flat projection was 12+ units off at spawn range).
+- [ ] Perf test with full caps on large canvas — MANUAL: serve `build/`, force
+  late-game (survive to min 10+ or seed bosses), watch workMs in the HUD.
+  Code side is ready: zero per-frame allocs held everywhere (fixed pools,
+  stack arrays), worst case ~65k separation + ~65k bullet×enemy checks/frame.
 - **Out:** 15-min run winnable with a decent build, losable with a bad one.
 
 ## Suggested code order

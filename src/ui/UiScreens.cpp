@@ -2,6 +2,8 @@
 
 #include <imgui.h>
 
+#include <cmath>
+
 namespace ui {
 
 const char *metaName(int i) {
@@ -69,7 +71,11 @@ void drawHud(const RunStats &run, float &curveK, float &fill, bool mouseCaptured
     const int ss = static_cast<int>(run.timerSec) % 60;
     ImGui::Text("Time %02d:%02d  Lv %d  Frags +%d", mm, ss, run.level, run.fragmentsEarned);
     ImGui::ProgressBar(run.xp01, ImVec2(200, 0), "XP");
-    if (run.bossHp01 >= 0.0f) ImGui::ProgressBar(run.bossHp01, ImVec2(200, 0), "BOSS-5");
+    if (run.bossHp01 >= 0.0f) {
+        char label[16];
+        snprintf(label, sizeof(label), "BOSS-%d", run.bossTier > 0 ? run.bossTier : 5);
+        ImGui::ProgressBar(run.bossHp01, ImVec2(200, 0), label);
+    }
     ImGui::End();
 
     if (!mouseCaptured) {
@@ -179,16 +185,46 @@ void drawPause(const std::function<void()> &onResume, const std::function<void()
 void drawGameOver(const RunStats &run, const std::function<void()> &onRetry, const std::function<void()> &onHub) {
     const ImVec2 center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::Begin("RUN OVER", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+    // M5: victory header when the final boss died.
+    ImGui::Begin(run.won ? "VICTORY — FINAL BOSS DOWN" : "RUN OVER", nullptr,
+                 ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
     const int mm = static_cast<int>(run.timerSec) / 60;
     const int ss = static_cast<int>(run.timerSec) % 60;
-    ImGui::Text("Survived %02d:%02d  — level %d, %d kills", mm, ss, run.level, run.kills);
-    // M4: fragment breakdown (02 economy) so the incremental loop is visible.
-    ImGui::Text("Fragments +%d  (time %d, kills %d, boss %d, draft %d)", run.fragmentsEarned, run.fragsTime,
-                run.fragsKills, run.fragsBoss, run.fragsDraft);
+    ImGui::Text("Survived %02d:%02d  — level %d, %d kills (%d elites, %d bosses)", mm, ss, run.level,
+                run.kills, run.elitesKilled, run.bossKills);
+    // M4/M5: fragment breakdown (02 economy) so the incremental loop is visible.
+    ImGui::Text("Fragments +%d  (time %d, kills %d, elite %d, boss %d, draft %d, victory %d)",
+                run.fragmentsEarned, run.fragsTime, run.fragsKills, run.fragsElite, run.fragsBoss,
+                run.fragsDraft, run.fragsVictory);
+    if (run.won) ImGui::Text("Difficulty unlocked: future runs hit harder, pay more.");
     if (ImGui::Button("Retry", ImVec2(200, 0))) onRetry();
     if (ImGui::Button("Hub", ImVec2(200, 0))) onHub();
     ImGui::End();
+}
+
+void drawEdgeArrows(const EdgeMarker *markers, std::size_t count) {
+    // M5: triangles at the screen border pointing at off-screen enemies.
+    if (!markers || count == 0) return;
+    const ImVec2 size = ImGui::GetIO().DisplaySize;
+    const ImVec2 center(size.x * 0.5f, size.y * 0.5f);
+    ImDrawList *dl = ImGui::GetForegroundDrawList();
+    for (std::size_t i = 0; i < count; ++i) {
+        const EdgeMarker &mk = markers[i];
+        const ImVec2 p((mk.x * 0.5f + 0.5f) * size.x, (1.0f - (mk.y * 0.5f + 0.5f)) * size.y);
+        ImVec2 dir(p.x - center.x, p.y - center.y);
+        const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        if (len < 1e-4f) continue;
+        dir.x /= len;
+        dir.y /= len;
+        const float s = mk.boss ? 16.0f : 10.0f;
+        const ImVec2 tip(p.x + dir.x * s, p.y + dir.y * s);
+        const ImVec2 base(p.x - dir.x * s * 0.6f, p.y - dir.y * s * 0.6f);
+        const ImVec2 perp(-dir.y * s * 0.6f, dir.x * s * 0.6f);
+        const ImU32 col = mk.boss ? IM_COL32(255, 60, 60, 255)
+                                  : (mk.elite ? IM_COL32(255, 210, 60, 255) : IM_COL32(255, 255, 255, 140));
+        dl->AddTriangleFilled(tip, ImVec2(base.x + perp.x, base.y + perp.y),
+                              ImVec2(base.x - perp.x, base.y - perp.y), col);
+    }
 }
 
 }  // namespace ui

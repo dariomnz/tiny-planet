@@ -9,6 +9,8 @@ struct EnemyBullet {
     glm::vec3 vel{0.0f};
     float life = 0.0f;
     float damage = 0.0f;
+    bool homing = false;  // M5: Boss-15 slow missiles steer toward the player
+    float speed = 0.0f;   // cruise speed for homing steering
 };
 
 // M3: enemy bullets (shooter aimed, boss fan/ring). Fixed pool, zero
@@ -18,8 +20,8 @@ struct EnemyBullet {
 class EnemyBulletSystem {
    public:
     void clear();
-    void spawn(const glm::vec2 &pos, const glm::vec2 &vel, float damage);
-    void update(float dt);
+    void spawn(const glm::vec2 &pos, const glm::vec2 &vel, float damage, bool homing = false);
+    void update(float dt, const glm::vec2 &playerPos);
     void killAt(std::size_t i);  // swap-remove, order not preserved
 
     [[nodiscard]] const EnemyBullet *data() const noexcept { return m_items.data(); }
