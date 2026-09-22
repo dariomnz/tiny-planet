@@ -44,6 +44,5 @@ target_link_options(tiny-planet PRIVATE
     -fexceptions
     -sDISABLE_EXCEPTION_CATCHING=0
     -sASSERTIONS=1
-    -sDEMANGLE_SUPPORT=1
     --shell-file=${CMAKE_SOURCE_DIR}/shell.html
 )
