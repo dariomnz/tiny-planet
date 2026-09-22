@@ -16,6 +16,23 @@
 
 namespace {
 Game *s_game = nullptr;
+
+// M3: per-type enemy colors (04 table). Boss reads white/red.
+glm::vec3 enemyColor(EnemyType t) {
+    switch (t) {
+        case EnemyType::Swarm:
+            return {1.0f, 0.55f, 0.1f};
+        case EnemyType::Shooter:
+            return {0.7f, 0.3f, 1.0f};
+        case EnemyType::Tank:
+            return {0.15f, 0.5f, 0.25f};
+        case EnemyType::Boss:
+            return {1.0f, 0.9f, 0.9f};
+        case EnemyType::Chaser:
+        default:
+            return {1.0f, 0.15f, 0.15f};
+    }
+}
 }  // namespace
 
 Game::Game() : m_window(config::kInitialFbW, config::kInitialFbH, "Planet 3D"), m_input(m_window.handle(), m_camera) {
@@ -61,6 +78,8 @@ void Game::startRun() {
     m_player = Player{};
     m_projectiles = ProjectileSystem{};
     m_enemies.clear();
+    m_enemyBullets.clear();
+    m_director.clear();
     m_gems.clear();
     m_run = RunStats{};
     m_run.maxHp = config::kHpBase + 10.0f * m_meta.levels[3];
@@ -321,9 +340,15 @@ void Game::update(float dt) {
         m_fireTimer = 1.0f / m_fireRate;
     }
     m_projectiles.update(dt);
-    m_enemies.update(dt, m_player.pos());
+    // M3: Director (budget/interval/boss) -> enemy AI + patterns -> bullets.
+    const float timeMin = m_run.timerSec / 60.0f;
+    m_director.update(dt, m_run.timerSec, m_player.pos(), m_enemies);
+    m_enemies.update(dt, m_player.pos(), m_enemyBullets, timeMin);
+    m_enemyBullets.update(dt);
     collideBulletsEnemies();
     collideEnemiesPlayer(dt);
+    collideEnemyBulletsPlayer();
+    refreshBossBar();
     m_gems.update(dt, m_player.pos());
     collectGems();  // may open the draft; the rest of this frame still runs once (harmless)
 
@@ -371,10 +396,12 @@ void Game::collideBulletsEnemies() {
                 enemies[ei].hp -= bullets[bi].damage;
                 consumed = true;
                 if (enemies[ei].hp <= 0.0f) {
-                    m_gems.spawn(enemies[ei].pos, config::kGemValue);  // M2: normal gem = 1 XP
+                    // M3: boss pays 25-XP gem + 15 fragments, normals 1 XP + 1.
+                    const bool isBoss = enemies[ei].type == EnemyType::Boss;
+                    m_gems.spawn(enemies[ei].pos, isBoss ? config::kBossGemValue : config::kGemValue);
                     m_enemies.killAt(ei);
                     enemies = m_enemies.data();  // swap-remove moved memory
-                    m_run.fragmentsEarned += 1;  // M1 visible reward (M4: real economy)
+                    m_run.fragmentsEarned += isBoss ? config::kBossFragments : 1;
                 }
                 break;  // one bullet hits one enemy
             }
@@ -395,7 +422,8 @@ void Game::collideEnemiesPlayer(float dt) {
     for (std::size_t i = 0; i < m_enemies.size(); ++i) {
         const Enemy &e = m_enemies.data()[i];
         const glm::vec2 d = pp - e.pos;
-        if (glm::dot(d, d) < config::kChaserContactRadius * config::kChaserContactRadius) {
+        const float rr = config::kPlayerRadius + e.radius;  // M3: per-type radius
+        if (glm::dot(d, d) < rr * rr) {
             m_run.hp -= e.damage;
             m_invulnTimer = config::kPlayerInvulnSec;
             break;  // one hit per iframe window
@@ -403,8 +431,35 @@ void Game::collideEnemiesPlayer(float dt) {
     }
 }
 
-void Game::renderScene() {
-    const int fbW = m_window.fbWidth();
+void Game::collideEnemyBulletsPlayer() {
+    // M3: enemy bullets vs player (shared iframes with contact hits).
+    if (m_invulnTimer > 0.0f) return;
+    const glm::vec2 pp = m_player.pos();
+    auto *bullets = m_enemyBullets.data();
+    for (std::size_t i = 0; i < m_enemyBullets.size(); ++i) {
+        const glm::vec2 d(pp.x - bullets[i].pos.x, pp.y - bullets[i].pos.y);
+        const float rr = config::kPlayerRadius + config::kEnemyBulletRadius;
+        if (glm::dot(d, d) < rr * rr) {
+            m_run.hp -= bullets[i].damage;
+            m_invulnTimer = config::kPlayerInvulnSec;
+            m_enemyBullets.killAt(i);
+            break;  // one hit per iframe window
+        }
+    }
+}
+
+void Game::refreshBossBar() {
+    m_run.bossHp01 = -1.0f;
+    for (std::size_t i = 0; i < m_enemies.size(); ++i) {
+        const Enemy &e = m_enemies.data()[i];
+        if (e.type == EnemyType::Boss && e.maxHp > 0.0f) {
+            m_run.bossHp01 = std::clamp(e.hp / e.maxHp, 0.0f, 1.0f);
+            return;
+        }
+    }
+}
+
+void Game::renderScene() {    const int fbW = m_window.fbWidth();
     const int fbH = m_window.fbHeight();
 
     const glm::mat4 view = m_camera.getView();
@@ -434,18 +489,25 @@ void Game::renderScene() {
         for (std::size_t i = 0; i < n; ++i) gpos[i] = m_gems.data()[i].pos;
         if (n > 0) m_entities.drawGems(gpos, n, {0.3f, 1.0f, 0.4f});
     }
-    // Enemies as red cubes (stack arrays: no heap allocs per frame).
+    // Enemies as colored cubes (stack arrays: no heap allocs per frame).
+    // Scale derives from the per-type radius (chaser 0.5 -> 0.8 to match M1).
     {
         const std::size_t n = m_enemies.size();
         // Fixed cap 256: bounded stack copies, refreshed every frame.
         glm::vec2 epos[256];
         float escale[256];
+        glm::vec3 ecolor[256];
         for (std::size_t i = 0; i < n; ++i) {
-            epos[i] = m_enemies.data()[i].pos;
-            escale[i] = 0.8f;
+            const Enemy &e = m_enemies.data()[i];
+            epos[i] = e.pos;
+            escale[i] = e.radius * 1.6f;
+            ecolor[i] = enemyColor(e.type);
         }
-        if (n > 0) m_entities.drawEnemies(epos, escale, n, {1.0f, 0.15f, 0.15f});
+        if (n > 0) m_entities.drawEnemies(epos, escale, ecolor, n);
     }
+    // M3: enemy bullets (magenta), same curved shader + projectile mesh.
+    if (m_enemyBullets.size() > 0)
+        m_entities.drawEnemyBullets(m_enemyBullets.data(), m_enemyBullets.size(), {1.0f, 0.2f, 0.5f});
 }
 
 void Game::drawUi() {

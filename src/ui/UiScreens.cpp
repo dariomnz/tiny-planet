@@ -69,6 +69,7 @@ void drawHud(const RunStats &run, float &curveK, float &fill, bool mouseCaptured
     const int ss = static_cast<int>(run.timerSec) % 60;
     ImGui::Text("Time %02d:%02d  Lv %d  Frags +%d", mm, ss, run.level, run.fragmentsEarned);
     ImGui::ProgressBar(run.xp01, ImVec2(200, 0), "XP");
+    if (run.bossHp01 >= 0.0f) ImGui::ProgressBar(run.bossHp01, ImVec2(200, 0), "BOSS-5");
     ImGui::End();
 
     if (!mouseCaptured) {

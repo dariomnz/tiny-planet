@@ -10,6 +10,7 @@
 #include "gl/VertexArray.h"
 
 struct Projectile;
+struct EnemyBullet;
 
 // Cubes with per-face shading + same curvature as the planet.
 // Shares a single Program for player/nose/projectiles.
@@ -22,8 +23,9 @@ class EntityRenderer {
      void drawPlayer(const glm::mat4 &model, const glm::vec3 &color) const;
      void drawNose(const glm::mat4 &model, const glm::vec3 &color) const;
      void drawProjectiles(const Projectile *items, std::size_t count, const glm::vec3 &color) const;
-     void drawEnemies(const glm::vec2 *positions, const float *scales, std::size_t count,
-                      const glm::vec3 &color) const;
+     void drawEnemies(const glm::vec2 *positions, const float *scales, const glm::vec3 *colors,
+                      std::size_t count) const;
+     void drawEnemyBullets(const EnemyBullet *items, std::size_t count, const glm::vec3 &color) const;
      void drawGems(const glm::vec2 *positions, std::size_t count, const glm::vec3 &color) const;
 
    private:

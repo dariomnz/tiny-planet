@@ -18,9 +18,14 @@
 - **Out:** first real build choice.
 
 ## M3 — Director + bullet hell
-- [ ] `Director` (budget, interval, boss schedule).
-- [ ] Shooter + Swarm + Tank + enemy bullets (pool 400).
-- [ ] Patterns: aimed, fan, ring. Boss at min 5.
+- [x] `Director` (`world/Director.h/.cpp`: `targetAlive(t)` budget, `spawnInterval(t)`,
+  time-gated roster chaser -> +swarm(1') -> +shooter(2') -> +tank(3'), Boss-5 at min 5,
+  normal spawns at 30% while boss lives).
+- [x] Shooter + Swarm + Tank + enemy bullets (`world/EnemyBullets.h/.cpp` pool 400,
+  skip-spawn + hold-fire when full; shooter holds ~12u; swarm groups of 8-12;
+  separation pass, tanks/bosses push through).
+- [x] Patterns: aimed (shooter), 5-fan + 12-ring (Boss-5, +1 fan bullet / 3 min).
+  Boss HP bar in HUD, 25-XP gem + 15 fragments on kill.
 - **Out:** it is a bullet hell now.
 
 ## M4 — Meta + persistence
@@ -46,6 +51,9 @@ real time/kill/boss economy.)
 the `emscripten_pause_main_loop` + `shell.html` bridge. `L` is now a debug "grant
 level" key. XP-hunger meta (+3%/lv) already applies to gem values; nova shares the
 player bullet pool so caps/skip rules hold.)
+(M3 notes: M1 inline spawner removed — Director owns all spawning on the 25-35u ring.
+Contact uses per-type `kPlayerRadius + e.radius`. Spinner/elites/Boss-10/15 stay in
+M5; boss schedule currently fires once at min 5.)
 
 ## "Ready to balance" bar
 15-min run at stable 60 fps with 200+ bullets on screen and draft working.

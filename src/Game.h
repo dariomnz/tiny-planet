@@ -10,7 +10,9 @@
 #include "platform/Window.h"
 #include "ui/ImGuiLayer.h"
 #include "ui/UiState.h"
+#include "world/Director.h"
 #include "world/Enemies.h"
+#include "world/EnemyBullets.h"
 #include "world/Pickups.h"
 #include "world/Player.h"
 #include "world/Projectiles.h"
@@ -40,7 +42,9 @@ class Game {
     void fireNova();      // M2: 8-bullet ring around the player
     void collideBulletsEnemies();
     void collideEnemiesPlayer(float dt);
+    void collideEnemyBulletsPlayer();
     void collectGems();
+    void refreshBossBar();  // M3: Boss-5 HP bar, -1 when no boss alive
 
     GlfwInit m_glfw;
     Window m_window;
@@ -49,6 +53,8 @@ class Game {
     Player m_player;
     ProjectileSystem m_projectiles;
     EnemySystem m_enemies;
+    EnemyBulletSystem m_enemyBullets;
+    Director m_director;
     GemSystem m_gems;
     PlanetRenderer m_planet;
     EntityRenderer m_entities;

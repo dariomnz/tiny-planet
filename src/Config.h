@@ -34,11 +34,6 @@ constexpr float kChaserHp = 20.0f;
 constexpr float kChaserDamage = 10.0f;  // contact
 constexpr float kChaserSpeed = 3.5f;
 constexpr float kChaserRadius = 0.5f;
-constexpr float kChaserContactRadius = kPlayerRadius + kChaserRadius;
-constexpr float kChaserSpawnInterval = 1.2f;  // s (t=0 value of spawnInterval(t))
-constexpr int kChaserTargetAlive = 6;         // t=0 value of targetAlive(t)
-constexpr float kChaserSpawnRingMin = 15.0f;
-constexpr float kChaserSpawnRingMax = 22.0f;
 
 // M2 — XP / gems / draft (mirrors docs/game-plan/02-level-progression.md
 // and 03-upgrades.md).
@@ -66,6 +61,71 @@ constexpr float kNovaMinCd = 1.0f;
 inline int xpNeed(int level) {
     if (level < 1) level = 1;
     return static_cast<int>(std::floor(kXpBase + std::pow(static_cast<float>(level), kXpPow) * kXpMult));
+}
+
+// M3 — Director + bullet hell (mirrors docs/game-plan/04-enemies-scaling.md).
+// t = run minutes (float).
+constexpr std::size_t kEnemyBulletCap = 400;
+constexpr float kEnemyBulletRadius = 0.3f;
+constexpr float kEnemyBulletLife = 6.0f;  // s; range-culls slow bullets
+constexpr float kEnemyBulletSpawnZ = 1.0f;
+constexpr float kEnemyFireRange = 30.0f;  // off-screen enemies hold fire (perf + fairness)
+
+// Per-type base stats (04 table). Contact = touch damage; bullet = shot damage.
+constexpr float kSwarmHp = 1.0f;
+constexpr float kSwarmDamage = 5.0f;
+constexpr float kSwarmSpeed = 5.5f;
+constexpr float kSwarmRadius = 0.35f;
+
+constexpr float kShooterHp = 30.0f;
+constexpr float kShooterBullet = 8.0f;
+constexpr float kShooterSpeed = 2.5f;
+constexpr float kShooterRadius = 0.5f;
+constexpr float kShooterPreferDist = 12.0f;  // holds ~12u, approaches/retreats outside 10-14u
+constexpr float kShooterFireCd = 2.5f;
+constexpr float kShooterFireRange = 24.0f;
+
+constexpr float kTankHp = 160.0f;
+constexpr float kTankDamage = 20.0f;
+constexpr float kTankSpeed = 1.8f;
+constexpr float kTankRadius = 0.9f;
+
+// Boss-5: HP bar + fan/ring patterns.
+constexpr float kBoss5Hp = 800.0f;
+constexpr float kBoss5Contact = 15.0f;
+constexpr float kBoss5Bullet = 12.0f;
+constexpr float kBoss5Speed = 2.2f;
+constexpr float kBoss5Radius = 1.5f;
+constexpr float kBoss5SpawnMin = 5.0f;
+constexpr float kBoss5SpawnDist = 20.0f;
+constexpr float kBossFanCd = 3.0f;
+constexpr float kBossRingCd = 4.0f;
+constexpr int kBossFanCount = 5;
+constexpr int kBossRingCount = 12;
+constexpr float kBossFanSpread = 0.3f;  // radians between fan bullets
+constexpr int kBossGemValue = 25;
+constexpr int kBossFragments = 15;
+
+// Director rings/schedule (04): 25-35u ring, boss live => spawns at 30%.
+constexpr float kSpawnRingMin = 25.0f;
+constexpr float kSpawnRingMax = 35.0f;
+constexpr int kSwarmGroupMin = 8;
+constexpr int kSwarmGroupMax = 12;
+
+// Scaling formulas (04). t = run minutes.
+inline int targetAlive(float t) {
+    if (t < 0.0f) t = 0.0f;
+    return 6 + static_cast<int>(t * 4.0f);
+}
+inline float spawnInterval(float t) {
+    if (t < 0.0f) t = 0.0f;
+    const float v = 1.2f - t * 0.07f;
+    return v < 0.25f ? 0.25f : v;
+}
+inline float bulletSpeed(float t) {
+    if (t < 0.0f) t = 0.0f;
+    const float v = 6.0f + t * 0.4f;
+    return v > 14.0f ? 14.0f : v;
 }
 
 constexpr float kFillSpeed = 0.5f;

@@ -6,6 +6,7 @@
 #include "gl/Types.h"
 #include "graphics/Meshes.h"
 #include "shaders/Shaders.h"
+#include "world/EnemyBullets.h"
 #include "world/Projectiles.h"
 
 namespace {
@@ -57,18 +58,30 @@ void EntityRenderer::drawProjectiles(const Projectile *items, std::size_t count,
     VertexArray::unbind();
 }
 
-void EntityRenderer::drawEnemies(const glm::vec2 *positions, const float *scales, std::size_t count,
-                                 const glm::vec3 &color) const {
-    // Reuses the player cube mesh: only color/scale differ (M1: red chasers).
-    // Same curved shader, no per-frame allocs.
-    m_prog.set("color", color);
+void EntityRenderer::drawEnemies(const glm::vec2 *positions, const float *scales, const glm::vec3 *colors,
+                                 std::size_t count) const {
+    // M3: per-type colors, same cube mesh + curved shader, no per-frame allocs.
     m_playerVao.bind();
     for (std::size_t i = 0; i < count; ++i) {
         glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(positions[i].x, positions[i].y, 0.0f));
         const float s = scales ? scales[i] : 1.0f;
         m = glm::scale(m, glm::vec3(s, s, s));
         m_prog.set("model", m);
+        m_prog.set("color", colors ? colors[i] : glm::vec3(1.0f, 0.15f, 0.15f));
         glDrawArrays(GL_TRIANGLES, 0, m_playerCount);
+    }
+    VertexArray::unbind();
+}
+
+void EntityRenderer::drawEnemyBullets(const EnemyBullet *items, std::size_t count,
+                                      const glm::vec3 &color) const {
+    // M3: magenta cubes reusing the projectile mesh.
+    m_prog.set("color", color);
+    m_projVao.bind();
+    for (std::size_t i = 0; i < count; ++i) {
+        const glm::mat4 m = glm::translate(glm::mat4(1.0f), items[i].pos);
+        m_prog.set("model", m);
+        glDrawArrays(GL_TRIANGLES, 0, m_projCount);
     }
     VertexArray::unbind();
 }

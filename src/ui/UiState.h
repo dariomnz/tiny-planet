@@ -23,6 +23,7 @@ struct RunStats {
     int level = 1;
     float xp = 0.0f;
     float xp01 = 0.0f;
+    float bossHp01 = -1.0f;  // M3: Boss HP bar, negative = hidden
     int fragmentsEarned = 0;
     int fps = 60;
     float workMs = 0.0f;
