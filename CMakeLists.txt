@@ -3,6 +3,7 @@ project(Tiny-planet LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT EMSCRIPTEN)
     message(FATAL_ERROR "This project is web-only: build with emcmake (Emscripten).")
@@ -17,7 +18,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
-add_executable(tiny-planet src/main.cpp src/camera.cpp)
+file(GLOB_RECURSE TINY_PLANET_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/src/*.cpp"
+)
+
+add_executable(tiny-planet ${TINY_PLANET_SOURCES})
+
+# execute_process(COMMAND em++ --cflags
+#     OUTPUT_VARIABLE EM_CFLAGS)
+
+# set_target_properties(tiny-planet PROPERTIES COMPILE_FLAGS "${EM_CFLAGS}")
 
 target_include_directories(tiny-planet PRIVATE
     "${CMAKE_SOURCE_DIR}/src"

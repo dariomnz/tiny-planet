@@ -13,7 +13,7 @@ echo "==> Configuring (Emscripten)..."
 emcmake cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
 echo "==> Building..."
-cmake --build build
+cmake --build build -j $(nproc)
 
 echo ""
 echo "Done! Serve with:"
