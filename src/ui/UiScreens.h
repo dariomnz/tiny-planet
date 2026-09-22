@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "game/Meta.h"
+#include "ui/DebugInfo.h"
 #include "ui/UiState.h"
 
 // All ImGui windows for Hub + in-run UI. Stateless free functions driven
@@ -17,7 +18,11 @@ const char *metaName(int i);
 const char *metaDesc(int i);
 int metaMax(int i);
 
-void drawHud(const RunStats &run, float &curveK, float &fill, bool mouseCaptured = true);
+void drawHud(const RunStats &run, const Meta &meta, const DebugSnapshot &snap, DebugActions actions,
+             float &curveK, float &fill, bool mouseCaptured = true);
+// Standalone debug panel (also used in Hub / GameOver where no HUD is shown).
+void drawDebugPanel(const RunStats &run, const Meta &meta, const DebugSnapshot &snap, DebugActions actions,
+                    float &curveK, float &fill, bool mouseCaptured = true);
 // onBuy fires after each purchase so Game can save (never per frame).
 void drawHub(Meta &meta, const std::function<void()> &onStart, const std::function<void()> &onBuy);
 void drawDraft(const std::array<DraftOption, 3> &opts, const std::function<void(int)> &onPick);

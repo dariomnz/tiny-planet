@@ -102,6 +102,7 @@ void Game::startRun() {
     m_upgCrit = 0;
     m_fragAccum = 0.0f;
     m_reviveUsed = false;
+    m_pendingDrafts = 0;
     m_rng = 0x9E3779B9u;
     // M5: NG+ mults (06: hp x1.5, dmg x1.2, frags x1.5 per win, stacking).
     m_ngHp = std::pow(config::kNgHpMult, m_meta.ngPlus);
@@ -290,7 +291,12 @@ void Game::applyDraft(int idx) {
         m_run.hp = std::min(m_run.maxHp, m_run.hp + 0.3f * m_run.maxHp);
         m_run.fragsDraft += config::kDraftFallbackFrags;
     }
-    // Level-up chain: leftover XP from a big pickup can afford another level.
+    // Chain pending debug level-ups first, then leftover XP chain.
+    if (m_pendingDrafts > 0) {
+        --m_pendingDrafts;
+        openDraft();
+        return;
+    }
     const int need = config::xpNeed(m_run.level);
     if (m_run.xp >= static_cast<float>(need)) {
         openDraft();  // stays in Draft with fresh options
@@ -308,11 +314,27 @@ void Game::addXp(float v) {
         m_run.xp01 = m_run.xp / static_cast<float>(need);
         return;
     }
-    m_run.xp -= static_cast<float>(need);
-    m_run.level += 1;
+    // Queue-friendly multi-level loop: the first level-up opens a draft
+    // immediately (if not already drafting); further levels queue up so
+    // a spammed debug "+1 level" during Draft no longer overwrites the
+    // current 1-of-3 options — the extra level appears after the pick.
+    bool opened = false;
+    while (m_run.xp >= static_cast<float>(config::xpNeed(m_run.level))) {
+        const int curNeed = config::xpNeed(m_run.level);
+        if (m_run.xp < static_cast<float>(curNeed)) break;
+        m_run.xp -= static_cast<float>(curNeed);
+        m_run.level += 1;
+        if (m_state == UiState::Draft || opened) {
+            ++m_pendingDrafts;
+        } else {
+            opened = true;
+            const int nxt = config::xpNeed(m_run.level);
+            m_run.xp01 = nxt > 0 ? m_run.xp / static_cast<float>(nxt) : 0.0f;
+            openDraft();
+        }
+    }
     need = config::xpNeed(m_run.level);
-    m_run.xp01 = m_run.xp / static_cast<float>(need);
-    openDraft();
+    m_run.xp01 = need > 0 ? m_run.xp / static_cast<float>(need) : 0.0f;
 }
 
 void Game::fireNova() {
@@ -547,7 +569,7 @@ void Game::frame() {
         // the lock -> handled above); ESC while unlocked (or in menus with
         // a visible cursor) arrives as a normal key.
         if (edge(GLFW_KEY_P, inRunLike) || edge(GLFW_KEY_ESCAPE, inRunLike)) togglePause();
-        if (edge(GLFW_KEY_L, m_state == UiState::Run)) addXp(static_cast<float>(config::xpNeed(m_run.level)));
+        if (edge(GLFW_KEY_L, m_state == UiState::Run)) grantLevel();
         if (edge(GLFW_KEY_K, m_state == UiState::Run)) gameOver();
         if (m_state == UiState::Hub && edge(GLFW_KEY_ENTER, true)) startRun();
     }
@@ -739,6 +761,7 @@ void Game::collideBulletsEnemies() {
 void Game::collideEnemiesPlayer(float dt) {
     m_invulnTimer = std::max(0.0f, m_invulnTimer - dt);
     if (m_invulnTimer > 0.0f) return;
+    if (m_godMode) return;  // debug cheat
     const glm::vec2 pp = m_player.pos();
     for (std::size_t i = 0; i < m_enemies.size(); ++i) {
         const Enemy &e = m_enemies.data()[i];
@@ -755,6 +778,7 @@ void Game::collideEnemiesPlayer(float dt) {
 void Game::collideEnemyBulletsPlayer() {
     // M3: enemy bullets vs player (shared iframes with contact hits).
     if (m_invulnTimer > 0.0f) return;
+    if (m_godMode) return;  // debug cheat
     const glm::vec2 pp = m_player.pos();
     auto *bullets = m_enemyBullets.data();
     for (std::size_t i = 0; i < m_enemyBullets.size(); ++i) {
@@ -878,26 +902,30 @@ void Game::renderScene() {
 
 void Game::drawUi() {
     m_imgui.beginFrame(m_window.fbWidth(), m_window.fbHeight());
+    const DebugSnapshot snap = buildDebugSnapshot();
+    DebugActions actions = debugActions();
     switch (m_state) {
         case UiState::Hub:
             ui::drawHub(m_meta, [this] { startRun(); }, [this] { m_meta.save(); });
+            ui::drawDebugPanel(m_run, m_meta, snap, actions, m_curveK, m_fill, m_input.isCaptured());
             break;
         case UiState::Run:
-            ui::drawHud(m_run, m_curveK, m_fill, m_input.isCaptured());
+            ui::drawHud(m_run, m_meta, snap, actions, m_curveK, m_fill, m_input.isCaptured());
             ui::drawEdgeArrows(m_edge.data(), m_edgeCount);
             break;
         case UiState::Draft:
-            ui::drawHud(m_run, m_curveK, m_fill);
+            ui::drawHud(m_run, m_meta, snap, actions, m_curveK, m_fill);
             ui::drawEdgeArrows(m_edge.data(), m_edgeCount);
             ui::drawDraft(m_draft, [this](int i) { applyDraft(i); });
             break;
         case UiState::Paused:
-            ui::drawHud(m_run, m_curveK, m_fill);
+            ui::drawHud(m_run, m_meta, snap, actions, m_curveK, m_fill);
             ui::drawEdgeArrows(m_edge.data(), m_edgeCount);
             ui::drawPause([this] { togglePause(); }, [this] { quitToHub(); });
             break;
         case UiState::GameOver:
             ui::drawGameOver(m_run, [this] { startRun(); }, [this] { quitToHub(); });
+            ui::drawDebugPanel(m_run, m_meta, snap, actions, m_curveK, m_fill, m_input.isCaptured());
             break;
     }
     m_imgui.endFrame();

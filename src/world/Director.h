@@ -18,6 +18,9 @@ class Director {
     void update(float dt, float timeSec, const glm::vec2 &playerPos, EnemySystem &enemies, float ngHp,
                 float ngDmg);
 
+    [[nodiscard]] float spawnTimer() const noexcept { return m_spawnTimer; }
+    [[nodiscard]] int bossesSpawned() const noexcept { return m_bossesSpawned; }
+
    private:
     float rand01() noexcept;  // deterministic xorshift, reset in clear()
 

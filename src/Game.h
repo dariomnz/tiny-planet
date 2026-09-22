@@ -57,6 +57,16 @@ class Game {
     void collectGems();
     void refreshBossBar();  // M3: Boss HP bar, -1 when no boss alive
     void refreshEdgeMarkers();  // M5: off-screen indicators from m_projView
+    DebugSnapshot buildDebugSnapshot() const;  // one snapshot per frame for the debug panel
+    DebugActions debugActions();               // cheat callbacks bound to this run
+    void healFull();
+    void killAllNonBoss();
+    void clearEnemyBullets();
+    void grantLevel();
+    void spawnBoss5();
+    void spawnBoss(int tier);
+    void spawnEnemy(int typeIdx);
+    void addMinute();
 
     GlfwInit m_glfw;
     Window m_window;
@@ -108,6 +118,8 @@ class Game {
     glm::vec2 m_orbPos[3]{};
     int m_orbCount = 0;
     bool m_reviveUsed = false;  // M5: meta revive, once per run
+    bool m_godMode = false;     // debug cheat: no contact/bullet damage
+    int m_pendingDrafts = 0;    // queued level-ups while Draft is open (debug cheat)
     unsigned m_rng = 0x9E3779B9u;
     float m_ngHp = 1.0f;    // M5: NG+ mults (1.5^n / 1.2^n / 1.5^n)
     float m_ngDmg = 1.0f;

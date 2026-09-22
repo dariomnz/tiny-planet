@@ -1,0 +1,186 @@
+#include "Game.h"
+
+#include <cmath>
+
+#include "Config.h"
+
+// Debug panel support + cheats. Lives here (not in Game.cpp) so gameplay
+// code stays free of debug clutter. All functions are Game members, so
+// they can read/touch run state directly.
+
+DebugSnapshot Game::buildDebugSnapshot() const {
+    DebugSnapshot s;
+    s.playerPos = m_player.pos();
+    s.playerYaw = m_player.yaw();
+    s.damage = m_damage;
+    s.fireRate = m_fireRate;
+    s.fireTimer = m_fireTimer;
+    s.bulletSpeed = m_bulletSpeed;
+    s.bulletRadius = m_bulletRadius;
+    s.playerSpeed = m_playerSpeed;
+    s.magnetRadius = m_magnetRadius;
+    s.critCh = m_critCh;
+    s.novaTimer = m_novaTimer;
+    s.missileTimer = m_missileTimer;
+    s.orbAngle = m_orbAngle;
+    s.orbCount = m_orbCount;
+    s.invulnTimer = m_invulnTimer;
+    s.fragAccum = m_fragAccum;
+    s.reviveUsed = m_reviveUsed;
+    s.upgLevels = {m_upgDamage, m_upgFire, m_upgNova, m_upgExtra, m_upgHeavy,
+                   m_upgOrb,    m_upgMis,  m_upgBoots, m_upgVit,  m_upgCrit};
+    s.xpNeed = config::xpNeed(m_run.level);
+
+    s.enemyCount = m_enemies.size();
+    s.enemyCap = config::kEnemyCap;
+    s.elitesCount = 0;
+    s.bossAlive = false;
+    for (std::size_t i = 0; i < m_enemies.size(); ++i) {
+        const Enemy &e = m_enemies.data()[i];
+        int idx = 0;
+        switch (e.type) {
+            case EnemyType::Chaser:
+                idx = 0;
+                break;
+            case EnemyType::Swarm:
+                idx = 1;
+                break;
+            case EnemyType::Shooter:
+                idx = 2;
+                break;
+            case EnemyType::Tank:
+                idx = 3;
+                break;
+            case EnemyType::Spinner:
+                idx = 4;
+                break;
+            case EnemyType::Boss:
+                idx = 5;
+                break;
+        }
+        s.enemyByType[static_cast<std::size_t>(idx)] += 1;
+        if (e.elite) ++s.elitesCount;
+        if (e.type == EnemyType::Boss) s.bossAlive = true;
+    }
+
+    s.projCount = m_projectiles.size();
+    s.projCap = config::kProjMax;
+    s.projHoming = 0;
+    for (std::size_t i = 0; i < m_projectiles.size(); ++i)
+        if (m_projectiles.data()[i].homing) ++s.projHoming;
+
+    s.enemyBulletCount = m_enemyBullets.size();
+    s.enemyBulletCap = config::kEnemyBulletCap;
+    s.enemyBulletHoming = 0;
+    for (std::size_t i = 0; i < m_enemyBullets.size(); ++i)
+        if (m_enemyBullets.data()[i].homing) ++s.enemyBulletHoming;
+
+    s.gemCount = m_gems.size();
+    s.gemCap = config::kGemCap;
+    s.edgeCount = m_edgeCount;
+
+    const float t = m_run.timerSec / 60.0f;
+    s.timeMin = t;
+    s.targetAlive = config::targetAlive(t);
+    s.spawnInterval = config::spawnInterval(t) * (s.bossAlive ? 3.3333333f : 1.0f);
+    s.hpMult = config::hpMult(t);
+    s.dmgMult = config::dmgMult(t);
+    s.enemyBulletSpeed = config::bulletSpeed(t);
+    s.spawnTimer = m_director.spawnTimer();
+    s.bossesSpawned = m_director.bossesSpawned();
+    s.ngHp = m_ngHp;
+    s.ngDmg = m_ngDmg;
+    s.fragMult = m_fragMult;
+
+    s.camYaw = m_camera.yaw;
+    s.camPitch = m_camera.pitch;
+    s.camDist = m_camera.distance;
+    s.camTargetDist = m_camera.targetDistance;
+    s.camTarget = m_camera.target;
+    s.gridSnap = {std::floor(m_player.pos().x / config::kCell + 0.5f) * config::kCell,
+                  std::floor(m_player.pos().y / config::kCell + 0.5f) * config::kCell};
+
+    s.pendingDrafts = m_pendingDrafts;
+    s.captured = m_input.isCaptured();
+    s.firing = m_input.isFiring();
+    s.wantsMouse = ImGuiLayer::wantsMouse();
+    s.wantsKeyboard = ImGuiLayer::wantsKeyboard();
+    s.fbW = m_window.fbWidth();
+    s.fbH = m_window.fbHeight();
+    s.state = m_state;
+    return s;
+}
+
+DebugActions Game::debugActions() {
+    DebugActions a;
+    a.godMode = &m_godMode;
+    a.onHealFull = [this] { healFull(); };
+    a.onKillAll = [this] { killAllNonBoss(); };
+    a.onClearEnemyBullets = [this] { clearEnemyBullets(); };
+    a.onGrantLevel = [this] { grantLevel(); };
+    a.onSpawnBoss = [this] { spawnBoss5(); };
+    a.onAddMinute = [this] { addMinute(); };
+    a.onSpawnEnemy = [this](int typeIdx) { spawnEnemy(typeIdx); };
+    a.onSpawnBossTier = [this](int tier) { spawnBoss(tier); };
+    return a;
+}
+
+void Game::healFull() { m_run.hp = m_run.maxHp; }
+
+void Game::killAllNonBoss() {
+    for (std::size_t n = m_enemies.size(); n-- > 0;) {
+        if (m_enemies.data()[n].type == EnemyType::Boss) continue;
+        if (!onEnemyKilled(n)) return;  // run ended (victory can't come from here, be safe)
+    }
+}
+
+void Game::clearEnemyBullets() { m_enemyBullets.clear(); }
+
+void Game::grantLevel() {
+    // Top up exactly the missing XP so one press = one level, reusing the
+    // existing progress. addXp(0) then runs the normal level-up path
+    // (exact, no float-mult rounding issues from dividing by the hunger bonus).
+    const int need = config::xpNeed(m_run.level);
+    if (m_run.xp < static_cast<float>(need)) m_run.xp = static_cast<float>(need);
+    addXp(0.0f);
+}
+
+void Game::spawnBoss5() { spawnBoss(5); }
+
+void Game::spawnBoss(int tier) {
+    const float t = m_run.timerSec / 60.0f;
+    const glm::vec2 p(m_player.pos().x + config::kBossSpawnDist, m_player.pos().y);
+    m_enemies.spawn(EnemySystem::make(EnemyType::Boss, p, m_ngHp, m_ngDmg * config::dmgMult(t), false, tier));
+}
+
+void Game::spawnEnemy(int typeIdx) {
+    // Debug spawner: one enemy of the requested type in front of the player,
+    // scaled like a natural Director spawn at the current clock.
+    EnemyType type = EnemyType::Chaser;
+    switch (typeIdx) {
+        case 0:
+            type = EnemyType::Chaser;
+            break;
+        case 1:
+            type = EnemyType::Swarm;
+            break;
+        case 2:
+            type = EnemyType::Shooter;
+            break;
+        case 3:
+            type = EnemyType::Tank;
+            break;
+        case 4:
+            type = EnemyType::Spinner;
+            break;
+        default:
+            return;
+    }
+    const float t = m_run.timerSec / 60.0f;
+    const glm::vec2 dir(std::cos(m_camera.yaw), std::sin(m_camera.yaw));
+    const glm::vec2 p = m_player.pos() + dir * 10.0f;
+    m_enemies.spawn(
+        EnemySystem::make(type, p, config::hpMult(t) * m_ngHp, config::dmgMult(t) * m_ngDmg));
+}
+
+void Game::addMinute() { m_run.timerSec += 60.0f; }
