@@ -102,13 +102,22 @@ void drawHud(const RunStats &run, float &curveK, float &fill, bool mouseCaptured
     ImGui::End();
 }
 
-void drawHub(MetaState &meta, const std::function<void()> &onStart) {
+void drawHub(Meta &meta, const std::function<void()> &onStart, const std::function<void()> &onBuy) {
     const ImVec2 center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(460, 0), ImGuiCond_FirstUseEver);
     ImGui::Begin("TINY PLANET — HUB", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
 
     ImGui::Text("Fragments: %d", meta.fragments);
+    // M4: progress line (best run, victories, NG+ when unlocked by a win).
+    {
+        const int bmm = static_cast<int>(meta.bestTimeSec) / 60;
+        const int bss = static_cast<int>(meta.bestTimeSec) % 60;
+        if (meta.ngPlus > 0)
+            ImGui::Text("Best %02d:%02d  Wins %d  NG+%d", bmm, bss, meta.wins, meta.ngPlus);
+        else
+            ImGui::Text("Best %02d:%02d  Wins %d", bmm, bss, meta.wins);
+    }
     ImGui::Separator();
 
     for (int i = 0; i < kMetaCount; ++i) {
@@ -129,6 +138,7 @@ void drawHub(MetaState &meta, const std::function<void()> &onStart) {
         if (!maxed && ImGui::Button(btn)) {
             meta.fragments -= cost;
             meta.levels[static_cast<size_t>(i)] = lvl + 1;
+            if (onBuy) onBuy();  // M4: each purchase is a save point (06)
         }
         ImGui::EndDisabled();
         ImGui::Separator();
@@ -172,7 +182,10 @@ void drawGameOver(const RunStats &run, const std::function<void()> &onRetry, con
     ImGui::Begin("RUN OVER", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
     const int mm = static_cast<int>(run.timerSec) / 60;
     const int ss = static_cast<int>(run.timerSec) % 60;
-    ImGui::Text("Survived %02d:%02d  — level %d, +%d fragments", mm, ss, run.level, run.fragmentsEarned);
+    ImGui::Text("Survived %02d:%02d  — level %d, %d kills", mm, ss, run.level, run.kills);
+    // M4: fragment breakdown (02 economy) so the incremental loop is visible.
+    ImGui::Text("Fragments +%d  (time %d, kills %d, boss %d, draft %d)", run.fragmentsEarned, run.fragsTime,
+                run.fragsKills, run.fragsBoss, run.fragsDraft);
     if (ImGui::Button("Retry", ImVec2(200, 0))) onRetry();
     if (ImGui::Button("Hub", ImVec2(200, 0))) onHub();
     ImGui::End();

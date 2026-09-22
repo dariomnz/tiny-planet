@@ -29,9 +29,18 @@
 - **Out:** it is a bullet hell now.
 
 ## M4 — Meta + persistence
-- [ ] `Meta.h/.cpp` + EM_JS load/save + DOM shop + run-end screen.
-- [ ] Fragment economy (time/kills/bosses).
-- [ ] Best time / wins / NG+.
+- [x] `Meta.h/.cpp` (`src/game/Meta.h/.cpp`: one `key=value` line per save field
+  under key `tiny_meta`, NOT the JSON of 06 — easier to inspect in devtools and
+  to parse; round-trip proven by a native test) + EM_JS load/save (bridge in
+  `platform/WebExt`, try/catch for private mode; save on run end + each purchase,
+  never per frame) + shop (stays the ImGui Hub, same deviation as M2 — no
+  DOM/`shell.html` bridge) + run-end breakdown screen (time/kills/boss/draft +
+  kills + level).
+- [x] Fragment economy (02): time 2/min + kills 0.1/kill (accumulator) + Boss-5
+  tier 15 + draft fallback 10. Live counter in HUD, finalized at run end.
+- [x] Best time / wins persisted and shown in Hub; NG+ counter + `recordRun(won)`
+  ready, but no victory path yet — `gameOver(won=true)` lands with the M5 final
+  boss (until then every run records `won=false`).
 - **Out:** it is incremental now.
 
 ## M5 — Content and balance

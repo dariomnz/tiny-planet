@@ -106,6 +106,12 @@ constexpr float kBossFanSpread = 0.3f;  // radians between fan bullets
 constexpr int kBossGemValue = 25;
 constexpr int kBossFragments = 15;
 
+// M4 — fragment economy (docs/game-plan/02-level-progression.md:
+// time 2/min, kills 0.1/kill; bosses/elites/victory tiers in M4/M5).
+constexpr float kFragPerMin = 2.0f;
+constexpr float kFragPerKill = 0.1f;
+constexpr int kDraftFallbackFrags = 10;
+
 // Director rings/schedule (04): 25-35u ring, boss live => spawns at 30%.
 constexpr float kSpawnRingMin = 25.0f;
 constexpr float kSpawnRingMax = 35.0f;

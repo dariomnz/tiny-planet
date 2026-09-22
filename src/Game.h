@@ -4,6 +4,7 @@
 #include <string>
 
 #include "camera.h"
+#include "game/Meta.h"
 #include "graphics/EntityRenderer.h"
 #include "graphics/PlanetRenderer.h"
 #include "platform/Input.h"
@@ -37,7 +38,7 @@ class Game {
     void openDraft();
     void applyDraft(int idx);
     void togglePause();
-    void gameOver();
+    void gameOver(bool won = false);  // M5 wires won=true (final boss)
     void addXp(float v);  // M2: gem XP (with XP-hunger meta), chains level-ups
     void fireNova();      // M2: 8-bullet ring around the player
     void collideBulletsEnemies();
@@ -61,7 +62,7 @@ class Game {
     ImGuiLayer m_imgui;
 
     UiState m_state = UiState::Hub;
-    MetaState m_meta;
+    Meta m_meta;
     RunStats m_run;
     std::array<DraftOption, 3> m_draft{};
     std::array<bool, 512> m_prevKeys{};
@@ -75,6 +76,7 @@ class Game {
     int m_upgDamage = 0;         // M2 draft levels (max 5 each)
     int m_upgFire = 0;
     int m_upgNova = 0;
+    float m_fragAccum = 0.0f;  // M4: fractional kill rewards (0.1/kill)
     float m_novaTimer = 0.0f;  // counts down to the next nova ring
     double m_lastTime = 0.0;
     double m_fpsLast = 0.0;

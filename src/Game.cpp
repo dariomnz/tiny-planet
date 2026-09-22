@@ -57,6 +57,10 @@ Game::Game() : m_window(config::kInitialFbW, config::kInitialFbH, "Planet 3D"), 
     std::cout << "Controls: Hub = mouse, WASD = move, hold-click = fire, "
                  "P = pause, L = level, K = die\n";
 
+    m_meta = Meta::load();  // M4: localStorage, defaults on first visit
+    std::cout << "Meta: " << m_meta.fragments << " fragments, best "
+              << m_meta.bestTimeSec << "s, " << m_meta.wins << " wins" << std::endl;
+
     m_prevKeys.fill(false);
     m_lastTime = glfwGetTime();
     m_fpsLast = m_lastTime;
@@ -87,6 +91,7 @@ void Game::startRun() {
     m_upgDamage = 0;
     m_upgFire = 0;
     m_upgNova = 0;
+    m_fragAccum = 0.0f;
     m_damage = config::kDmgBase * (1.0f + 0.02f * m_meta.levels[0]);
     m_fireRate = config::kFireRateBase;
     m_fireTimer = 0.0f;
@@ -141,9 +146,9 @@ void Game::applyDraft(int idx) {
         ++m_upgNova;
         m_novaTimer = std::min(m_novaTimer, 1.0f);  // first ring comes out quickly
     } else {
-        // Fallback (02-level-progression.md): heal 30% + 10 fragments.
+        // Fallback (02-level-progression.md): heal 30% + fragments at run end.
         m_run.hp = std::min(m_run.maxHp, m_run.hp + 0.3f * m_run.maxHp);
-        m_run.fragmentsEarned += 10;
+        m_run.fragsDraft += config::kDraftFallbackFrags;
     }
     // Level-up chain: leftover XP from a big pickup can afford another level.
     const int need = config::xpNeed(m_run.level);
@@ -209,8 +214,15 @@ void Game::togglePause() {
     }
 }
 
-void Game::gameOver() {
+void Game::gameOver(bool won) {
+    // M4: real fragment economy (02-run-economy): time 2/min + kills 0.1/kill
+    // + boss tiers (15/40/100, only Boss-5 exists until M5) + draft fallback.
+    m_run.fragsTime = static_cast<int>(config::kFragPerMin * (m_run.timerSec / 60.0f));
+    m_run.fragsKills = static_cast<int>(m_fragAccum);
+    m_run.fragmentsEarned = m_run.fragsTime + m_run.fragsKills + m_run.fragsBoss + m_run.fragsDraft;
     m_meta.fragments += m_run.fragmentsEarned;
+    m_meta.recordRun(m_run.timerSec, won);
+    m_meta.save();  // run end is a save point (06)
     m_state = UiState::GameOver;
     m_input.releaseCapture();
 }
@@ -365,6 +377,9 @@ void Game::update(float dt) {
     m_camera.update(dt, m_player.pos());
 
     m_run.timerSec += dt;
+    // M4: live fragment counter for the HUD (finalized in gameOver).
+    m_run.fragmentsEarned = m_run.fragsDraft + m_run.fragsBoss + static_cast<int>(m_fragAccum) +
+                            static_cast<int>(config::kFragPerMin * (m_run.timerSec / 60.0f));
     if (m_run.hp <= 0.0f) gameOver();
 
     // FPS (wall-clock, includes vsync) + average WORK ms per frame
@@ -396,12 +411,19 @@ void Game::collideBulletsEnemies() {
                 enemies[ei].hp -= bullets[bi].damage;
                 consumed = true;
                 if (enemies[ei].hp <= 0.0f) {
-                    // M3: boss pays 25-XP gem + 15 fragments, normals 1 XP + 1.
+                    // M4: boss pays 25-XP gem + fragsBoss tier; normals feed
+                    // the 0.1/kill accumulator settled at run end.
                     const bool isBoss = enemies[ei].type == EnemyType::Boss;
                     m_gems.spawn(enemies[ei].pos, isBoss ? config::kBossGemValue : config::kGemValue);
                     m_enemies.killAt(ei);
                     enemies = m_enemies.data();  // swap-remove moved memory
-                    m_run.fragmentsEarned += isBoss ? config::kBossFragments : 1;
+                    if (isBoss) {
+                        ++m_run.bossKills;
+                        m_run.fragsBoss += config::kBossFragments;
+                    } else {
+                        ++m_run.kills;
+                        m_fragAccum += config::kFragPerKill;
+                    }
                 }
                 break;  // one bullet hits one enemy
             }
@@ -514,7 +536,7 @@ void Game::drawUi() {
     m_imgui.beginFrame(m_window.fbWidth(), m_window.fbHeight());
     switch (m_state) {
         case UiState::Hub:
-            ui::drawHub(m_meta, [this] { startRun(); });
+            ui::drawHub(m_meta, [this] { startRun(); }, [this] { m_meta.save(); });
             break;
         case UiState::Run:
             ui::drawHud(m_run, m_curveK, m_fill, m_input.isCaptured());

@@ -1,21 +1,14 @@
 #pragma once
 
-#include <array>
 #include <string>
 
 // UI state machine: Hub <-> Run (+ Draft / Paused / GameOver overlays).
-// All in-memory for now (no LocalStorage persistence, phase 2).
+// Permanent meta lives in game/Meta.h (localStorage persistence, M4).
 enum class UiState { Hub, Run, Draft, Paused, GameOver };
-
-// Permanent meta upgrades (mirrors docs/game-plan/03-upgrades.md, in-memory).
-struct MetaState {
-    int fragments = 120;
-    // levels per meta upgrade, same order as UiScreens::kMetaNames.
-    std::array<int, 6> levels{0, 0, 0, 0, 0, 0};
-};
 
 // Per-run stats shown in the ImGui HUD. M2: xp/level are real (gems ->
 // addXp -> xpNeed); xp01 is the derived bar fraction xp/xpNeed(level).
+// M4: fragment breakdown (time/kills/boss/draft) filled at run end.
 struct RunStats {
     float hp = 100.0f;
     float maxHp = 100.0f;
@@ -24,7 +17,13 @@ struct RunStats {
     float xp = 0.0f;
     float xp01 = 0.0f;
     float bossHp01 = -1.0f;  // M3: Boss HP bar, negative = hidden
-    int fragmentsEarned = 0;
+    int kills = 0;
+    int bossKills = 0;
+    int fragsTime = 0;
+    int fragsKills = 0;
+    int fragsBoss = 0;
+    int fragsDraft = 0;
+    int fragmentsEarned = 0;  // total = time + kills + boss + draft
     int fps = 60;
     float workMs = 0.0f;
 };

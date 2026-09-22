@@ -4,7 +4,9 @@
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 
+#include <cstdlib>
 #include <iostream>
+#include <string>
 
 #include "platform/Input.h"
 #include "platform/Window.h"
@@ -13,6 +15,25 @@ namespace {
 
 InputManager *s_input = nullptr;
 Window *s_window = nullptr;
+
+// 06-persistence.md recipe + try/catch (private-mode localStorage throws).
+EM_JS(char *, js_meta_load, (), {
+    try {
+        const s = localStorage.getItem("tiny_meta");
+        if (!s) return 0;
+        const n = lengthBytesUTF8(s) + 1;
+        const p = _malloc(n);
+        stringToUTF8(s, p, n);
+        return p;
+    } catch (e) {
+        return 0;
+    }
+});
+EM_JS(void, js_meta_save, (const char *s), {
+    try {
+        localStorage.setItem("tiny_meta", UTF8ToString(s));
+    } catch (e) {}
+});
 
 EM_BOOL onWebResize(int /*type*/, const EmscriptenUiEvent *e, void * /*ud*/) {
     if (!s_window) return EM_TRUE;
@@ -92,5 +113,16 @@ void installPointerLockHandlers(Window &window, InputManager &input) {
 }
 
 void enterMainLoop(void (*tick)()) { emscripten_set_main_loop(tick, 0, 1); }
+
+std::string metaLoad() {
+    char *p = js_meta_load();
+    std::string s = p ? p : "";
+    if (p) std::free(p);
+    return s;
+}
+
+void metaSave(const char *s) {
+    if (s) js_meta_save(s);
+}
 
 }  // namespace web
