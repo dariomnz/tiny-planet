@@ -38,7 +38,7 @@ Game::Game() : m_window(config::kInitialFbW, config::kInitialFbH, "Planet 3D"), 
     }
 
     std::cout << "Controls: Hub = mouse, WASD = move, hold-click = fire, "
-                 "P = pause, L = draft, K = die\n";
+                 "P = pause, L = level, K = die\n";
 
     m_prevKeys.fill(false);
     m_lastTime = glfwGetTime();
@@ -61,12 +61,17 @@ void Game::startRun() {
     m_player = Player{};
     m_projectiles = ProjectileSystem{};
     m_enemies.clear();
+    m_gems.clear();
     m_run = RunStats{};
     m_run.maxHp = config::kHpBase + 10.0f * m_meta.levels[3];
     m_run.hp = m_run.maxHp;
+    m_upgDamage = 0;
+    m_upgFire = 0;
+    m_upgNova = 0;
     m_damage = config::kDmgBase * (1.0f + 0.02f * m_meta.levels[0]);
     m_fireRate = config::kFireRateBase;
     m_fireTimer = 0.0f;
+    m_novaTimer = 0.0f;
     m_invulnTimer = 0.0f;
     m_state = UiState::Run;
     // Called from a UI gesture (button/Enter): piggybacks its transient
@@ -81,23 +86,98 @@ void Game::quitToHub() {
 }
 
 void Game::openDraft() {
-    m_draft = {{{"Basic damage", "+15% damage (mock)"},
-                {"Fire rate", "+12% fire rate (mock)"},
-                {"Vitality", "+20 max HP, heal 20 (mock)"}}};
+    // M2: first real build choice — damage / fire rate / nova (max 5 each).
+    // Only non-maxed upgrades are offered; when everything is maxed all
+    // three slots become the "Heal 30% + 10 Fragments" fallback (02-draft).
+    const bool maxDmg = m_upgDamage >= config::kUpgMaxLevel;
+    const bool maxFire = m_upgFire >= config::kUpgMaxLevel;
+    const bool maxNova = m_upgNova >= config::kUpgMaxLevel;
+    int slot = 0;
+    auto offer = [&](int id, const char *name, char *descBuf, std::size_t n, const char *fmt, int lvl) {
+        snprintf(descBuf, n, fmt, lvl + 1);
+        m_draft[static_cast<std::size_t>(slot++)] = {name, descBuf, id};
+    };
+    // Stack buffers: no heap allocs for the formatted descriptions.
+    char d0[96], d1[96], d2[96];
+    if (!maxDmg && slot < 3) offer(0, "Basic damage", d0, sizeof(d0), "+15%% damage (lv %d)", m_upgDamage);
+    if (!maxFire && slot < 3) offer(1, "Fire rate", d1, sizeof(d1), "+12%% fire rate (lv %d)", m_upgFire);
+    if (!maxNova && slot < 3) offer(2, "Nova", d2, sizeof(d2), "8-bullet ring (lv %d)", m_upgNova);
+    // Fallback fills any remaining slots (all three when fully maxed).
+    for (; slot < 3; ++slot)
+        m_draft[static_cast<std::size_t>(slot)] = {"Overcharge", "Heal 30% + 10 Fragments", 3};
     m_state = UiState::Draft;
     m_input.releaseCapture();
 }
 
 void Game::applyDraft(int idx) {
-    if (idx == 2) {
-        m_run.maxHp += 20.0f;
-        m_run.hp = std::min(m_run.maxHp, m_run.hp + 20.0f);
+    const int id = (idx >= 0 && idx < 3) ? m_draft[static_cast<std::size_t>(idx)].id : 3;
+    if (id == 0 && m_upgDamage < config::kUpgMaxLevel) {
+        ++m_upgDamage;
+        m_damage = config::kDmgBase * std::pow(config::kUpgDamageMult, m_upgDamage) *
+                   (1.0f + 0.02f * m_meta.levels[0]);
+    } else if (id == 1 && m_upgFire < config::kUpgMaxLevel) {
+        ++m_upgFire;
+        m_fireRate = config::kFireRateBase * std::pow(config::kUpgFireRateMult, m_upgFire);
+    } else if (id == 2 && m_upgNova < config::kUpgMaxLevel) {
+        ++m_upgNova;
+        m_novaTimer = std::min(m_novaTimer, 1.0f);  // first ring comes out quickly
+    } else {
+        // Fallback (02-level-progression.md): heal 30% + 10 fragments.
+        m_run.hp = std::min(m_run.maxHp, m_run.hp + 0.3f * m_run.maxHp);
+        m_run.fragmentsEarned += 10;
     }
-    if (idx == 0) m_run.fragmentsEarned += 1;  // mock visible effect
-    m_run.level += 1;
-    m_run.xp01 = 0.0f;
+    // Level-up chain: leftover XP from a big pickup can afford another level.
+    const int need = config::xpNeed(m_run.level);
+    if (m_run.xp >= static_cast<float>(need)) {
+        openDraft();  // stays in Draft with fresh options
+        return;
+    }
     m_state = UiState::Run;
     m_input.requestCapture();  // draft pick click -> try to re-lock at once
+}
+
+void Game::addXp(float v) {
+    v *= 1.0f + 0.03f * m_meta.levels[1];  // XP hunger meta
+    m_run.xp += v;
+    int need = config::xpNeed(m_run.level);
+    if (m_run.xp < static_cast<float>(need)) {
+        m_run.xp01 = m_run.xp / static_cast<float>(need);
+        return;
+    }
+    m_run.xp -= static_cast<float>(need);
+    m_run.level += 1;
+    need = config::xpNeed(m_run.level);
+    m_run.xp01 = m_run.xp / static_cast<float>(need);
+    openDraft();
+}
+
+void Game::fireNova() {
+    // 8-bullet ring around the player (03-upgrades.md), uses the shared
+    // player bullet pool so caps/skip rules still apply.
+    const glm::vec2 pp = m_player.pos();
+    const glm::vec3 center(pp.x, pp.y, config::kProjSpawnZ);
+    for (int i = 0; i < config::kNovaBullets; ++i) {
+        const float a = 6.2831853f * static_cast<float>(i) / static_cast<float>(config::kNovaBullets);
+        m_projectiles.spawnAt(center + glm::vec3(std::cos(a) * 0.6f, std::sin(a) * 0.6f, 0.0f),
+                              glm::vec3(std::cos(a), std::sin(a), 0.0f) * config::kProjSpeed, m_damage);
+    }
+}
+
+void Game::collectGems() {
+    // 2D pickup radius; collected gems grant XP via addXp (level-up chain).
+    const glm::vec2 pp = m_player.pos();
+    const float rr = config::kGemCollectRadius;
+    for (std::size_t i = 0; i < m_gems.size();) {
+        const glm::vec2 d = pp - m_gems.data()[i].pos;
+        if (glm::dot(d, d) < rr * rr) {
+            const int v = m_gems.data()[i].value;
+            m_gems.collectAt(i);
+            addXp(static_cast<float>(v));
+            if (m_state != UiState::Run) return;  // leveled up -> Draft paused the world
+        } else {
+            ++i;
+        }
+    }
 }
 
 void Game::togglePause() {
@@ -157,7 +237,7 @@ void Game::frame() {
         // the lock -> handled above); ESC while unlocked (or in menus with
         // a visible cursor) arrives as a normal key.
         if (edge(GLFW_KEY_P, inRunLike) || edge(GLFW_KEY_ESCAPE, inRunLike)) togglePause();
-        if (edge(GLFW_KEY_L, m_state == UiState::Run)) openDraft();
+        if (edge(GLFW_KEY_L, m_state == UiState::Run)) addXp(static_cast<float>(config::xpNeed(m_run.level)));
         if (edge(GLFW_KEY_K, m_state == UiState::Run)) gameOver();
         if (m_state == UiState::Hub && edge(GLFW_KEY_ENTER, true)) startRun();
     }
@@ -244,13 +324,22 @@ void Game::update(float dt) {
     m_enemies.update(dt, m_player.pos());
     collideBulletsEnemies();
     collideEnemiesPlayer(dt);
+    m_gems.update(dt, m_player.pos());
+    collectGems();  // may open the draft; the rest of this frame still runs once (harmless)
+
+    // M2: Nova auto-skill — ring every (6 - 0.5*lv)s once unlocked.
+    if (m_upgNova > 0) {
+        m_novaTimer -= dt;
+        if (m_novaTimer <= 0.0f) {
+            fireNova();
+            const float cd = config::kNovaBaseCd - config::kNovaCdPerLevel * m_upgNova;
+            m_novaTimer = std::max(config::kNovaMinCd, cd);
+        }
+    }
 
     m_camera.update(dt, m_player.pos());
 
-    // Mock run clock / xp so HUD moves until real game/Run lands.
     m_run.timerSec += dt;
-    m_run.xp01 += dt * 0.05f;
-    if (m_run.xp01 >= 1.0f) openDraft();
     if (m_run.hp <= 0.0f) gameOver();
 
     // FPS (wall-clock, includes vsync) + average WORK ms per frame
@@ -282,6 +371,7 @@ void Game::collideBulletsEnemies() {
                 enemies[ei].hp -= bullets[bi].damage;
                 consumed = true;
                 if (enemies[ei].hp <= 0.0f) {
+                    m_gems.spawn(enemies[ei].pos, config::kGemValue);  // M2: normal gem = 1 XP
                     m_enemies.killAt(ei);
                     enemies = m_enemies.data();  // swap-remove moved memory
                     m_run.fragmentsEarned += 1;  // M1 visible reward (M4: real economy)
@@ -337,6 +427,13 @@ void Game::renderScene() {
     m_entities.drawPlayer(model, {1.0f, 0.25f, 0.2f});
     m_entities.drawNose(model, {1.0f, 0.85f, 0.2f});
     m_entities.drawProjectiles(m_projectiles.data(), m_projectiles.size(), {0.3f, 0.8f, 1.0f});
+    // Gems as small green cubes (stack array: no heap allocs per frame).
+    {
+        const std::size_t n = m_gems.size();
+        glm::vec2 gpos[300];
+        for (std::size_t i = 0; i < n; ++i) gpos[i] = m_gems.data()[i].pos;
+        if (n > 0) m_entities.drawGems(gpos, n, {0.3f, 1.0f, 0.4f});
+    }
     // Enemies as red cubes (stack arrays: no heap allocs per frame).
     {
         const std::size_t n = m_enemies.size();

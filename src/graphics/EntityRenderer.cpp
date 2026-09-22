@@ -72,3 +72,16 @@ void EntityRenderer::drawEnemies(const glm::vec2 *positions, const float *scales
     }
     VertexArray::unbind();
 }
+
+void EntityRenderer::drawGems(const glm::vec2 *positions, std::size_t count, const glm::vec3 &color) const {
+    // M2: small green cubes hovering at z=0.5. Reuses the projectile mesh.
+    // Same curved shader, no per-frame allocs.
+    m_prog.set("color", color);
+    m_projVao.bind();
+    for (std::size_t i = 0; i < count; ++i) {
+        const glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(positions[i].x, positions[i].y, 0.5f));
+        m_prog.set("model", m);
+        glDrawArrays(GL_TRIANGLES, 0, m_projCount);
+    }
+    VertexArray::unbind();
+}

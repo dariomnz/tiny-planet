@@ -89,7 +89,7 @@ void drawHud(const RunStats &run, float &curveK, float &fill, bool mouseCaptured
     ImGui::Begin("Tuning", nullptr, ImGuiWindowFlags_NoSavedSettings);
     ImGui::SliderFloat("curveK", &curveK, 0.0f, 0.2f, "%.3f");
     ImGui::SliderFloat("fill", &fill, 0.0f, 1.0f, "%.2f");
-    ImGui::TextDisabled("WASD move | Hold-click fire | P pause | L draft | K die");
+    ImGui::TextDisabled("WASD move | Hold-click fire | P pause | L level | K die");
     // Live capture diagnostics (remote debugging aid).
     {
         const ImGuiIO &io = ImGui::GetIO();

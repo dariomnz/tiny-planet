@@ -16,6 +16,15 @@ void ProjectileSystem::spawn(const glm::vec2 &playerPos, float yaw, float damage
     m_items[m_count++] = p;
 }
 
+void ProjectileSystem::spawnAt(const glm::vec3 &pos, const glm::vec3 &vel, float damage) {
+    if (m_count >= m_items.size()) return;  // pool full: skip (no allocs, no blowup)
+    Projectile p;
+    p.pos = pos;
+    p.vel = vel;
+    p.life = config::kProjLife;
+    p.damage = damage;
+    m_items[m_count++] = p;
+}
 void ProjectileSystem::update(float dt) {
     for (std::size_t i = 0; i < m_count;) {
         Projectile &p = m_items[i];

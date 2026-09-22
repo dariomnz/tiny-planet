@@ -17,6 +17,7 @@ struct Projectile {
 class ProjectileSystem {
     public:
      void spawn(const glm::vec2 &playerPos, float yaw, float damage);
+     void spawnAt(const glm::vec3 &pos, const glm::vec3 &vel, float damage);  // M2: nova ring
      void update(float dt);
      void killAt(std::size_t i);  // swap-remove, order not preserved
 

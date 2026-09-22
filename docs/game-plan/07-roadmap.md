@@ -9,9 +9,12 @@
 - **Out:** you can kill and die. No XP yet.
 
 ## M2 — XP and draft
-- [ ] Gems + magnet + `xpNeed(n)` + levels.
-- [ ] Pause + 3-option DOM overlay + 3 upgrades (damage / fire rate / nova).
-- [ ] "Heal + fragments" fallback when everything is maxed.
+- [x] Gems + magnet + `xpNeed(n)` + levels (`world/Pickups.h/.cpp` pool 300, magnet
+  2.5u @10u/s, despawn 20s, kill drops 1-XP gem, `config::xpNeed(n)=floor(5+n^1.6*3)`).
+- [x] Pause + 3-option overlay + 3 upgrades (damage +15% / fire rate +12% / nova
+  8-ring, max 5 each). Overlay is the ImGui `Draft` modal, not a DOM overlay:
+  same behavior (world frozen, pick 1 of 3), no `shell.html`/JS bridge needed.
+- [x] "Heal 30% + 10 Fragments" fallback fills empty slots when maxed (all 3 when fully maxed).
 - **Out:** first real build choice.
 
 ## M3 — Director + bullet hell
@@ -39,6 +42,10 @@ Director → enemy bullets → Meta → rest.
 M1 spawner is a minimal inline director in `EnemySystem::trySpawn`; M3 replaces it
 with the real `Director`. Kill reward is a temporary +1 fragment/kill; M4 wires the
 real time/kill/boss economy.)
+(M2 notes: draft overlay stayed ImGui instead of DOM — same pause/pick flow without
+the `emscripten_pause_main_loop` + `shell.html` bridge. `L` is now a debug "grant
+level" key. XP-hunger meta (+3%/lv) already applies to gem values; nova shares the
+player bullet pool so caps/skip rules hold.)
 
 ## "Ready to balance" bar
 15-min run at stable 60 fps with 200+ bullets on screen and draft working.
