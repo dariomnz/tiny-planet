@@ -2,12 +2,21 @@
 
 #include <imgui.h>
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 
 #include "Config.h"
 
 namespace ui {
+
+// Self timer for per-panel ms (UI layer stays free of GLFW).
+struct PanelClock {
+    std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+    float ms() const {
+        return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    }
+};
 
 const char *metaName(int i) {
     static const char *kNames[kMetaCount] = {"Base edge",   "XP hunger",      "Haste",
@@ -60,7 +69,8 @@ static int costFor(int index, int level) {
 }
 
 void drawHud(const RunStats &run, const Meta &meta, const DebugSnapshot &snap, DebugActions actions,
-             float &curveK, float &fill, bool mouseCaptured) {
+             float &curveK, float &fill, bool mouseCaptured, UiPanelMs &timers) {
+    PanelClock clk;
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.35f);
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
@@ -95,11 +105,15 @@ void drawHud(const RunStats &run, const Meta &meta, const DebugSnapshot &snap, D
     }
 
     // Full debug panel (collapsible sections + cheats, visible in every state).
-    drawDebugPanel(run, meta, snap, actions, curveK, fill, mouseCaptured);
+    // Timed separately: hud records its window only, excl. the debug panel.
+    const float hudOnlyMs = clk.ms();
+    drawDebugPanel(run, meta, snap, actions, curveK, fill, mouseCaptured, timers);
+    timers.hud = hudOnlyMs;
 }
 
 void drawDebugPanel(const RunStats &run, const Meta &meta, const DebugSnapshot &snap, DebugActions actions,
-                    float &curveK, float &fill, bool mouseCaptured) {
+                    float &curveK, float &fill, bool mouseCaptured, UiPanelMs &timers) {
+    PanelClock clk;
     ImGui::SetNextWindowPos(ImVec2(10, 150), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.6f);
     ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_NoSavedSettings);
@@ -149,6 +163,27 @@ void drawDebugPanel(const RunStats &run, const Meta &meta, const DebugSnapshot &
                              ImVec2(-1, 40));
         } else {
             ImGui::TextDisabled("collecting frame history...");
+        }
+        if (ImGui::CollapsingHeader("UI panels")) {
+            if (ImGui::BeginTable("ui_panels", 2,
+                                  ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit |
+                                      ImGuiTableFlags_NoSavedSettings)) {
+                ImGui::TableSetupColumn("ui panel");
+                ImGui::TableSetupColumn("ms");
+                ImGui::TableHeadersRow();
+                const UiPanelMs &p = snap.perfUiPanels;
+                const char *kNames[9] = {"snap", "frame", "hub", "hud", "debug",
+                                         "draft", "pause", "over", "edge"};
+                const float kVals[9] = {p.snap, p.frame, p.hub, p.hud, p.debug, p.draft, p.pause, p.over, p.edge};
+                for (int i = 0; i < 9; ++i) {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::TextUnformatted(kNames[i]);
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%.2f", static_cast<double>(kVals[i]));
+                }
+                ImGui::EndTable();
+            }
         }
     }
 
@@ -299,10 +334,13 @@ void drawDebugPanel(const RunStats &run, const Meta &meta, const DebugSnapshot &
         }
     }
 
+    timers.debug = clk.ms();
     ImGui::End();
 }
 
-void drawHub(Meta &meta, const std::function<void()> &onStart, const std::function<void()> &onBuy) {
+void drawHub(Meta &meta, const std::function<void()> &onStart, const std::function<void()> &onBuy,
+             UiPanelMs &timers) {
+    PanelClock clk;
     const ImVec2 center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(460, 0), ImGuiCond_FirstUseEver);
@@ -349,9 +387,12 @@ void drawHub(Meta &meta, const std::function<void()> &onStart, const std::functi
     ImGui::TextDisabled("START RUN, then click the scene to capture the mouse.");
     ImGui::TextDisabled("ESC/P pauses. After ESC, wait ~1s before re-clicking.");
     ImGui::End();
+    timers.hub = clk.ms();
 }
 
-void drawDraft(const std::array<DraftOption, 3> &opts, const std::function<void(int)> &onPick) {
+void drawDraft(const std::array<DraftOption, 3> &opts, const std::function<void(int)> &onPick,
+               UiPanelMs &timers) {
+    PanelClock clk;
     ImGui::OpenPopup("LEVEL UP — pick 1 of 3");
     const ImVec2 center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
@@ -365,18 +406,24 @@ void drawDraft(const std::array<DraftOption, 3> &opts, const std::function<void(
         }
         ImGui::EndPopup();
     }
+    timers.draft = clk.ms();
 }
 
-void drawPause(const std::function<void()> &onResume, const std::function<void()> &onQuit) {
+void drawPause(const std::function<void()> &onResume, const std::function<void()> &onQuit,
+               UiPanelMs &timers) {
+    PanelClock clk;
     const ImVec2 center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::Begin("PAUSED", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
     if (ImGui::Button("Resume (P)", ImVec2(200, 0))) onResume();
     if (ImGui::Button("Quit to Hub", ImVec2(200, 0))) onQuit();
     ImGui::End();
+    timers.pause = clk.ms();
 }
 
-void drawGameOver(const RunStats &run, const std::function<void()> &onRetry, const std::function<void()> &onHub) {
+void drawGameOver(const RunStats &run, const std::function<void()> &onRetry, const std::function<void()> &onHub,
+                  UiPanelMs &timers) {
+    PanelClock clk;
     const ImVec2 center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     // M5: victory header when the final boss died.
@@ -394,9 +441,11 @@ void drawGameOver(const RunStats &run, const std::function<void()> &onRetry, con
     if (ImGui::Button("Retry", ImVec2(200, 0))) onRetry();
     if (ImGui::Button("Hub", ImVec2(200, 0))) onHub();
     ImGui::End();
+    timers.over = clk.ms();
 }
 
-void drawEdgeArrows(const EdgeMarker *markers, std::size_t count) {
+void drawEdgeArrows(const EdgeMarker *markers, std::size_t count, UiPanelMs &timers) {
+    PanelClock clk;
     // M5: triangles at the screen border pointing at off-screen enemies.
     if (!markers || count == 0) return;
     const ImVec2 size = ImGui::GetIO().DisplaySize;
@@ -419,6 +468,7 @@ void drawEdgeArrows(const EdgeMarker *markers, std::size_t count) {
         dl->AddTriangleFilled(tip, ImVec2(base.x + perp.x, base.y + perp.y),
                               ImVec2(base.x - perp.x, base.y - perp.y), col);
     }
+    timers.edge = clk.ms();
 }
 
 }  // namespace ui

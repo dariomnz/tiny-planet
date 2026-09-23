@@ -117,6 +117,7 @@ DebugSnapshot Game::buildDebugSnapshot() const {
     s.perfEntFlush = m_perfAvgFlush;
     s.perfUi = m_perfAvgUi;
     s.perfTotal = m_perfAvgTotal;
+    s.perfUiPanels = m_perfUiAvg;
     // Unwrap ring (oldest -> newest) for ImGui::PlotLines.
     s.histN = m_perfHistCount;
     for (int i = 0; i < m_perfHistCount; ++i) {
@@ -221,6 +222,15 @@ void Game::perfPushFrame() {
     m_perfWinFlush += m_perfEntFlushMs;
     m_perfWinUi += m_perfUiMs;
     m_perfWinTotal += m_perfTotalMs;
+    m_perfUiWin.snap += m_perfUiLast.snap;
+    m_perfUiWin.frame += m_perfUiLast.frame;
+    m_perfUiWin.hub += m_perfUiLast.hub;
+    m_perfUiWin.hud += m_perfUiLast.hud;
+    m_perfUiWin.debug += m_perfUiLast.debug;
+    m_perfUiWin.draft += m_perfUiLast.draft;
+    m_perfUiWin.pause += m_perfUiLast.pause;
+    m_perfUiWin.over += m_perfUiLast.over;
+    m_perfUiWin.edge += m_perfUiLast.edge;
     ++m_perfWinFrames;
 }
 
@@ -236,6 +246,16 @@ void Game::perfTickWindow(double now) {
     m_perfAvgFlush = static_cast<float>(m_perfWinFlush / n);
     m_perfAvgUi = static_cast<float>(m_perfWinUi / n);
     m_perfAvgTotal = static_cast<float>(m_perfWinTotal / n);
+    m_perfUiAvg.snap = m_perfUiWin.snap / static_cast<float>(m_perfWinFrames);
+    m_perfUiAvg.frame = m_perfUiWin.frame / static_cast<float>(m_perfWinFrames);
+    m_perfUiAvg.hub = m_perfUiWin.hub / static_cast<float>(m_perfWinFrames);
+    m_perfUiAvg.hud = m_perfUiWin.hud / static_cast<float>(m_perfWinFrames);
+    m_perfUiAvg.debug = m_perfUiWin.debug / static_cast<float>(m_perfWinFrames);
+    m_perfUiAvg.draft = m_perfUiWin.draft / static_cast<float>(m_perfWinFrames);
+    m_perfUiAvg.pause = m_perfUiWin.pause / static_cast<float>(m_perfWinFrames);
+    m_perfUiAvg.over = m_perfUiWin.over / static_cast<float>(m_perfWinFrames);
+    m_perfUiAvg.edge = m_perfUiWin.edge / static_cast<float>(m_perfWinFrames);
+    m_perfUiWin = UiPanelMs{};
     m_perfWinUpdate = m_perfWinSim = m_perfWinCollide = 0.0;
     m_perfWinPlanet = m_perfWinSubmit = m_perfWinFlush = 0.0;
     m_perfWinUi = m_perfWinTotal = 0.0;

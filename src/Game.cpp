@@ -923,32 +923,41 @@ void Game::renderScene() {
 }
 
 void Game::drawUi() {
+    UiPanelMs pt;
+    const double tB0 = glfwGetTime();
     m_imgui.beginFrame(m_window.fbWidth(), m_window.fbHeight());
+    const double tB1 = glfwGetTime();
+    const double tS0 = glfwGetTime();
     const DebugSnapshot snap = buildDebugSnapshot();
     DebugActions actions = debugActions();
+    pt.snap = static_cast<float>((glfwGetTime() - tS0) * 1000.0);
     switch (m_state) {
         case UiState::Hub:
-            ui::drawHub(m_meta, [this] { startRun(); }, [this] { m_meta.save(); });
-            ui::drawDebugPanel(m_run, m_meta, snap, actions, m_curveK, m_fill, m_input.isCaptured());
+            ui::drawHub(m_meta, [this] { startRun(); }, [this] { m_meta.save(); }, pt);
+            ui::drawDebugPanel(m_run, m_meta, snap, actions, m_curveK, m_fill, m_input.isCaptured(), pt);
             break;
         case UiState::Run:
-            ui::drawHud(m_run, m_meta, snap, actions, m_curveK, m_fill, m_input.isCaptured());
-            ui::drawEdgeArrows(m_edge.data(), m_edgeCount);
+            ui::drawHud(m_run, m_meta, snap, actions, m_curveK, m_fill, m_input.isCaptured(), pt);
+            ui::drawEdgeArrows(m_edge.data(), m_edgeCount, pt);
             break;
         case UiState::Draft:
-            ui::drawHud(m_run, m_meta, snap, actions, m_curveK, m_fill);
-            ui::drawEdgeArrows(m_edge.data(), m_edgeCount);
-            ui::drawDraft(m_draft, [this](int i) { applyDraft(i); });
+            ui::drawHud(m_run, m_meta, snap, actions, m_curveK, m_fill, true, pt);
+            ui::drawEdgeArrows(m_edge.data(), m_edgeCount, pt);
+            ui::drawDraft(m_draft, [this](int i) { applyDraft(i); }, pt);
             break;
         case UiState::Paused:
-            ui::drawHud(m_run, m_meta, snap, actions, m_curveK, m_fill);
-            ui::drawEdgeArrows(m_edge.data(), m_edgeCount);
-            ui::drawPause([this] { togglePause(); }, [this] { quitToHub(); });
+            ui::drawHud(m_run, m_meta, snap, actions, m_curveK, m_fill, true, pt);
+            ui::drawEdgeArrows(m_edge.data(), m_edgeCount, pt);
+            ui::drawPause([this] { togglePause(); }, [this] { quitToHub(); }, pt);
             break;
         case UiState::GameOver:
-            ui::drawGameOver(m_run, [this] { startRun(); }, [this] { quitToHub(); });
-            ui::drawDebugPanel(m_run, m_meta, snap, actions, m_curveK, m_fill, m_input.isCaptured());
+            ui::drawGameOver(m_run, [this] { startRun(); }, [this] { quitToHub(); }, pt);
+            ui::drawDebugPanel(m_run, m_meta, snap, actions, m_curveK, m_fill, m_input.isCaptured(), pt);
             break;
     }
+    const double tE0 = glfwGetTime();
     m_imgui.endFrame();
+    const double tE1 = glfwGetTime();
+    pt.frame = static_cast<float>((tB1 - tB0 + tE1 - tE0) * 1000.0);
+    m_perfUiLast = pt;
 }

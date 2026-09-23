@@ -159,6 +159,9 @@ class Game {
     float m_perfAvgFlush = 0.0f;
     float m_perfAvgUi = 0.0f;
     float m_perfAvgTotal = 0.0f;
+    UiPanelMs m_perfUiLast{};
+    UiPanelMs m_perfUiWin{};
+    UiPanelMs m_perfUiAvg{};
     std::array<float, 120> m_perfHistTotal{};
     std::array<float, 120> m_perfHistUpdate{};
     std::array<float, 120> m_perfHistRender{};

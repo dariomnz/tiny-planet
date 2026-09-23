@@ -7,6 +7,20 @@
 
 #include "ui/UiState.h"
 
+// Per-panel UI timings (ms). Filled by ui::draw* when given a pointer,
+// aggregated into 0.5s averages in DebugSnapshot below.
+struct UiPanelMs {
+    float snap = 0.0f;   // buildDebugSnapshot + debugActions
+    float frame = 0.0f;  // ImGui begin/endFrame overhead
+    float hub = 0.0f;
+    float hud = 0.0f;  // HUD window only, excl. debug panel
+    float debug = 0.0f;
+    float draft = 0.0f;
+    float pause = 0.0f;
+    float over = 0.0f;
+    float edge = 0.0f;
+};
+
 // Snapshot of live game state for the debug panel. Filled once per frame
 // by Game::buildDebugSnapshot(); plain data only (no pointers into pools),
 // so the UI layer never touches world internals directly.
@@ -89,6 +103,7 @@ struct DebugSnapshot {
     float perfEntFlush = 0.0f;   // VBO upload + draws
     float perfUi = 0.0f;
     float perfTotal = 0.0f;
+    UiPanelMs perfUiPanels{};  // per-panel UI averages (0.5s window)
     static constexpr int kPerfHist = 120;
     std::array<float, kPerfHist> histTotal{};
     std::array<float, kPerfHist> histUpdate{};
