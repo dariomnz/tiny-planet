@@ -4,8 +4,9 @@
 
 #include "Config.h"
 
-void ProjectileSystem::spawn(const glm::vec2 &playerPos, float yaw, float damage) {
-    if (m_count >= m_items.size()) return;  // pool full: skip (no allocs, no blowup)
+ProjectileSystem::ProjectileSystem() { m_items.resize(config::kProjMax); }
+
+void ProjectileSystem::spawn(const glm::vec2 &playerPos, float yaw, float damage) {    if (m_count >= m_items.size()) return;  // pool full: skip (no allocs, no blowup)
     const glm::vec3 dir(std::cos(yaw), std::sin(yaw), 0.0f);
     Projectile p;
     p.pos = glm::vec3(playerPos.x + dir.x * config::kProjForwardOffset,

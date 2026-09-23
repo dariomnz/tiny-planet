@@ -1,8 +1,8 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <glm/glm.hpp>
+#include <vector>
 
 #include "Config.h"
 
@@ -19,6 +19,7 @@ struct Projectile {
 // When the pool is full, spawn() skips (see 04-enemies-scaling.md).
 class ProjectileSystem {
     public:
+     ProjectileSystem();  // heap-backed pool: sized once to kProjMax, no per-frame allocs
      void spawn(const glm::vec2 &playerPos, float yaw, float damage);
      void spawnAt(const glm::vec3 &pos, const glm::vec3 &vel, float damage);  // M2: nova ring
      void update(float dt);
@@ -30,6 +31,6 @@ class ProjectileSystem {
      [[nodiscard]] bool full() const noexcept { return m_count >= m_items.size(); }
 
     private:
-     std::array<Projectile, config::kProjMax> m_items{};
+     std::vector<Projectile> m_items{};
      std::size_t m_count = 0;
 };

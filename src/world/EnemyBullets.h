@@ -1,8 +1,8 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <glm/glm.hpp>
+#include <vector>
 
 #include "Config.h"
 
@@ -21,6 +21,7 @@ struct EnemyBullet {
 // (see 04-enemies-scaling.md: stop firing before the frame can blow up).
 class EnemyBulletSystem {
    public:
+    EnemyBulletSystem();  // heap-backed pool: sized once to kEnemyBulletCap, no per-frame allocs
     void clear();
     void spawn(const glm::vec2 &pos, const glm::vec2 &vel, float damage, bool homing = false);
     void update(float dt, const glm::vec2 &playerPos);
@@ -32,6 +33,6 @@ class EnemyBulletSystem {
     [[nodiscard]] bool full() const noexcept { return m_count >= m_items.size(); }
 
    private:
-    std::array<EnemyBullet, config::kEnemyBulletCap> m_items{};
+    std::vector<EnemyBullet> m_items{};
     std::size_t m_count = 0;
 };

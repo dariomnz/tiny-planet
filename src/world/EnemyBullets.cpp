@@ -6,6 +6,8 @@
 
 void EnemyBulletSystem::clear() { m_count = 0; }
 
+EnemyBulletSystem::EnemyBulletSystem() { m_items.resize(config::kEnemyBulletCap); }
+
 void EnemyBulletSystem::spawn(const glm::vec2 &pos, const glm::vec2 &vel, float damage, bool homing) {
     if (m_count >= config::kEnemyBulletCap || m_count >= m_items.size()) return;  // pool full: skip
     EnemyBullet b;

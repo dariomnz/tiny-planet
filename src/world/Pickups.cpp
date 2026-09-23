@@ -6,6 +6,8 @@
 
 void GemSystem::clear() { m_count = 0; }
 
+GemSystem::GemSystem() { m_items.resize(config::kGemCap); }
+
 void GemSystem::spawn(const glm::vec2 &pos, int value) {
     if (m_count >= config::kGemCap || m_count >= m_items.size()) return;  // pool full: skip
     Gem g;

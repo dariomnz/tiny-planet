@@ -1,8 +1,8 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <glm/glm.hpp>
+#include <vector>
 
 #include "Config.h"
 
@@ -34,6 +34,7 @@ struct Enemy {
 // movement AI, firing patterns and separation.
 class EnemySystem {
    public:
+    EnemySystem();  // heap-backed pool: sized once to kEnemyCap, no per-frame allocs
     // hpMult/dmgMult are precombined by the Director: time scaling
     // (hpMult(t)/dmgMult(t)) x NG+ mults for normals; NG+ only for bosses.
     static Enemy make(EnemyType type, const glm::vec2 &pos, float hpMult = 1.0f, float dmgMult = 1.0f,
@@ -50,6 +51,6 @@ class EnemySystem {
     [[nodiscard]] std::size_t size() const noexcept { return m_count; }
 
    private:
-    std::array<Enemy, config::kEnemyCap> m_items{};
+    std::vector<Enemy> m_items{};
     std::size_t m_count = 0;
 };

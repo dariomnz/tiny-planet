@@ -78,6 +78,8 @@ Enemy EnemySystem::make(EnemyType type, const glm::vec2 &pos, float hpMult, floa
 
 void EnemySystem::clear() { m_count = 0; }
 
+EnemySystem::EnemySystem() { m_items.resize(config::kEnemyCap); }
+
 bool EnemySystem::spawn(const Enemy &e) {
     if (m_count >= config::kEnemyCap || m_count >= m_items.size()) return false;
     m_items[m_count++] = e;

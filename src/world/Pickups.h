@@ -1,8 +1,8 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <glm/glm.hpp>
+#include <vector>
 
 #include "Config.h"
 
@@ -19,6 +19,7 @@ struct Gem {
 // out-of-range gems despawn after kGemDespawnSec.
 class GemSystem {
    public:
+    GemSystem();  // heap-backed pool: sized once to kGemCap, no per-frame allocs
     void clear();
     void spawn(const glm::vec2 &pos, int value);
     void update(float dt, const glm::vec2 &playerPos, float magnetRadius);
@@ -28,6 +29,6 @@ class GemSystem {
     [[nodiscard]] std::size_t size() const noexcept { return m_count; }
 
    private:
-    std::array<Gem, config::kGemCap> m_items{};
+    std::vector<Gem> m_items{};
     std::size_t m_count = 0;
 };
