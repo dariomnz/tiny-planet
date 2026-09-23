@@ -19,7 +19,7 @@ const char *metaDesc(int i);
 int metaMax(int i);
 
 void drawHud(const RunStats &run, const Meta &meta, const DebugSnapshot &snap, DebugActions actions,
-             float &curveK, float &fill, bool mouseCaptured, UiPanelMs &timers);
+             float &curveK, float &fill, bool mouseCaptured, bool showDebug, UiPanelMs &timers);
 // Standalone debug panel (also used in Hub / GameOver where no HUD is shown).
 void drawDebugPanel(const RunStats &run, const Meta &meta, const DebugSnapshot &snap, DebugActions actions,
                     float &curveK, float &fill, bool mouseCaptured, UiPanelMs &timers);

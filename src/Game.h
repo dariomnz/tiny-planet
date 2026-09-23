@@ -119,6 +119,7 @@ class Game {
     int m_orbCount = 0;
     bool m_reviveUsed = false;  // M5: meta revive, once per run
     bool m_godMode = false;     // debug cheat: no contact/bullet damage
+    bool m_showDebug = false;   // debug panel visibility (F1), default off: saves UI verts/draws
     int m_pendingDrafts = 0;    // queued level-ups while Draft is open (debug cheat)
     unsigned m_rng = 0x9E3779B9u;
     float m_ngHp = 1.0f;    // M5: NG+ mults (1.5^n / 1.2^n / 1.5^n)
@@ -162,10 +163,10 @@ class Game {
     UiPanelMs m_perfUiLast{};
     UiPanelMs m_perfUiWin{};
     UiPanelMs m_perfUiAvg{};
-    std::array<float, 120> m_perfHistTotal{};
-    std::array<float, 120> m_perfHistUpdate{};
-    std::array<float, 120> m_perfHistRender{};
-    std::array<float, 120> m_perfHistUi{};
+    std::array<float, DebugSnapshot::kPerfHist> m_perfHistTotal{};
+    std::array<float, DebugSnapshot::kPerfHist> m_perfHistUpdate{};
+    std::array<float, DebugSnapshot::kPerfHist> m_perfHistRender{};
+    std::array<float, DebugSnapshot::kPerfHist> m_perfHistUi{};
     int m_perfHistHead = 0;
     int m_perfHistCount = 0;
     double m_perfWinLast = 0.0;

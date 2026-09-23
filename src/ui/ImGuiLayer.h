@@ -17,6 +17,11 @@ class ImGuiLayer {
     // Must be called every frame before any ImGui:: calls.
     void beginFrame(int fbW, int fbH);
     void endFrame();
+    // Split phases of endFrame() for perf timing: render() builds draw
+    // lists on the CPU (ImGui::Render), renderDrawData() uploads + draws
+    // them via WebGL (backend). endFrame() runs both.
+    void render();
+    void renderDrawData();
     // True if any ImGui window wants the mouse/keyboard (to gate game input).
     static bool wantsMouse();
     static bool wantsKeyboard();

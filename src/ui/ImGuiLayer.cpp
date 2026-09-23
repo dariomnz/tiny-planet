@@ -43,7 +43,17 @@ void ImGuiLayer::beginFrame(int fbW, int fbH) {
 
 void ImGuiLayer::endFrame() {
     if (!m_init) return;
+    render();
+    renderDrawData();
+}
+
+void ImGuiLayer::render() {
+    if (!m_init) return;
     ImGui::Render();
+}
+
+void ImGuiLayer::renderDrawData() {
+    if (!m_init) return;
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 

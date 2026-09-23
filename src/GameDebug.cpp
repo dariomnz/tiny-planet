@@ -118,10 +118,11 @@ DebugSnapshot Game::buildDebugSnapshot() const {
     s.perfUi = m_perfAvgUi;
     s.perfTotal = m_perfAvgTotal;
     s.perfUiPanels = m_perfUiAvg;
-    // Unwrap ring (oldest -> newest) for ImGui::PlotLines.
+    // Unwrap ring (oldest -> newest) for the graph.
     s.histN = m_perfHistCount;
+    static constexpr int kHist = DebugSnapshot::kPerfHist;
     for (int i = 0; i < m_perfHistCount; ++i) {
-        const int idx = (m_perfHistHead - m_perfHistCount + i + 120 * 2) % 120;
+        const int idx = (m_perfHistHead - m_perfHistCount + i + kHist * 2) % kHist;
         s.histTotal[static_cast<std::size_t>(i)] = m_perfHistTotal[static_cast<std::size_t>(idx)];
         s.histUpdate[static_cast<std::size_t>(i)] = m_perfHistUpdate[static_cast<std::size_t>(idx)];
         s.histRender[static_cast<std::size_t>(i)] = m_perfHistRender[static_cast<std::size_t>(idx)];
@@ -133,6 +134,7 @@ DebugSnapshot Game::buildDebugSnapshot() const {
 DebugActions Game::debugActions() {
     DebugActions a;
     a.godMode = &m_godMode;
+    a.showDebug = &m_showDebug;
     a.onHealFull = [this] { healFull(); };
     a.onKillAll = [this] { killAllNonBoss(); };
     a.onClearEnemyBullets = [this] { clearEnemyBullets(); };
@@ -205,14 +207,15 @@ void Game::spawnEnemy(int typeIdx) {
 void Game::addMinute() { m_run.timerSec += 60.0f; }
 
 void Game::perfPushFrame() {
+    static constexpr int kHist = DebugSnapshot::kPerfHist;
     const float renderMs =
         static_cast<float>(m_perfPlanetMs + m_perfEntSubmitMs + m_perfEntFlushMs);
     m_perfHistTotal[m_perfHistHead] = static_cast<float>(m_perfTotalMs);
     m_perfHistUpdate[m_perfHistHead] = static_cast<float>(m_perfUpdateMs);
     m_perfHistRender[m_perfHistHead] = renderMs;
     m_perfHistUi[m_perfHistHead] = static_cast<float>(m_perfUiMs);
-    m_perfHistHead = (m_perfHistHead + 1) % 120;
-    if (m_perfHistCount < 120) ++m_perfHistCount;
+    m_perfHistHead = (m_perfHistHead + 1) % kHist;
+    if (m_perfHistCount < kHist) ++m_perfHistCount;
 
     m_perfWinUpdate += m_perfUpdateMs;
     m_perfWinSim += m_perfSimMs;
@@ -223,7 +226,9 @@ void Game::perfPushFrame() {
     m_perfWinUi += m_perfUiMs;
     m_perfWinTotal += m_perfTotalMs;
     m_perfUiWin.snap += m_perfUiLast.snap;
-    m_perfUiWin.frame += m_perfUiLast.frame;
+    m_perfUiWin.newFrame += m_perfUiLast.newFrame;
+    m_perfUiWin.uiRender += m_perfUiLast.uiRender;
+    m_perfUiWin.uiGL += m_perfUiLast.uiGL;
     m_perfUiWin.hub += m_perfUiLast.hub;
     m_perfUiWin.hud += m_perfUiLast.hud;
     m_perfUiWin.debug += m_perfUiLast.debug;
@@ -247,7 +252,9 @@ void Game::perfTickWindow(double now) {
     m_perfAvgUi = static_cast<float>(m_perfWinUi / n);
     m_perfAvgTotal = static_cast<float>(m_perfWinTotal / n);
     m_perfUiAvg.snap = m_perfUiWin.snap / static_cast<float>(m_perfWinFrames);
-    m_perfUiAvg.frame = m_perfUiWin.frame / static_cast<float>(m_perfWinFrames);
+    m_perfUiAvg.newFrame = m_perfUiWin.newFrame / static_cast<float>(m_perfWinFrames);
+    m_perfUiAvg.uiRender = m_perfUiWin.uiRender / static_cast<float>(m_perfWinFrames);
+    m_perfUiAvg.uiGL = m_perfUiWin.uiGL / static_cast<float>(m_perfWinFrames);
     m_perfUiAvg.hub = m_perfUiWin.hub / static_cast<float>(m_perfWinFrames);
     m_perfUiAvg.hud = m_perfUiWin.hud / static_cast<float>(m_perfWinFrames);
     m_perfUiAvg.debug = m_perfUiWin.debug / static_cast<float>(m_perfWinFrames);

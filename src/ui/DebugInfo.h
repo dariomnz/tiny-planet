@@ -11,7 +11,9 @@
 // aggregated into 0.5s averages in DebugSnapshot below.
 struct UiPanelMs {
     float snap = 0.0f;   // buildDebugSnapshot + debugActions
-    float frame = 0.0f;  // ImGui begin/endFrame overhead
+    float newFrame = 0.0f;  // ImGui_Impl* + ImGui::NewFrame
+    float uiRender = 0.0f;  // ImGui::Render (CPU draw-list build)
+    float uiGL = 0.0f;      // backend RenderDrawData (WebGL upload + draws)
     float hub = 0.0f;
     float hud = 0.0f;  // HUD window only, excl. debug panel
     float debug = 0.0f;
@@ -104,7 +106,7 @@ struct DebugSnapshot {
     float perfUi = 0.0f;
     float perfTotal = 0.0f;
     UiPanelMs perfUiPanels{};  // per-panel UI averages (0.5s window)
-    static constexpr int kPerfHist = 120;
+    static constexpr int kPerfHist = 60;
     std::array<float, kPerfHist> histTotal{};
     std::array<float, kPerfHist> histUpdate{};
     std::array<float, kPerfHist> histRender{};
@@ -113,9 +115,10 @@ struct DebugSnapshot {
 };
 
 // Cheat/test actions owned by Game, invoked from the debug panel.
-// godMode points at Game state so the checkbox edits it live.
+// godMode/showDebug point at Game state so the widgets edit it live.
 struct DebugActions {
     bool *godMode = nullptr;
+    bool *showDebug = nullptr;
     std::function<void()> onHealFull;
     std::function<void()> onKillAll;
     std::function<void()> onClearEnemyBullets;

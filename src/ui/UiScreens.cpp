@@ -69,7 +69,7 @@ static int costFor(int index, int level) {
 }
 
 void drawHud(const RunStats &run, const Meta &meta, const DebugSnapshot &snap, DebugActions actions,
-             float &curveK, float &fill, bool mouseCaptured, UiPanelMs &timers) {
+             float &curveK, float &fill, bool mouseCaptured, bool showDebug, UiPanelMs &timers) {
     PanelClock clk;
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.35f);
@@ -84,12 +84,12 @@ void drawHud(const RunStats &run, const Meta &meta, const DebugSnapshot &snap, D
     const int mm = static_cast<int>(run.timerSec) / 60;
     const int ss = static_cast<int>(run.timerSec) % 60;
     ImGui::Text("Time %02d:%02d  Lv %d  Frags +%d", mm, ss, run.level, run.fragmentsEarned);
-    ImGui::ProgressBar(run.xp01, ImVec2(200, 0), "XP");
-    if (run.bossHp01 >= 0.0f) {
+    ImGui::ProgressBar(run.xp01, ImVec2(200, 0), "XP");    if (run.bossHp01 >= 0.0f) {
         char label[16];
         snprintf(label, sizeof(label), "BOSS-%d", run.bossTier > 0 ? run.bossTier : 5);
         ImGui::ProgressBar(run.bossHp01, ImVec2(200, 0), label);
     }
+    ImGui::TextDisabled("B: debug panel");
     ImGui::End();
 
     if (!mouseCaptured) {
@@ -104,21 +104,24 @@ void drawHud(const RunStats &run, const Meta &meta, const DebugSnapshot &snap, D
         ImGui::End();
     }
 
-    // Full debug panel (collapsible sections + cheats, visible in every state).
+    // Full debug panel (gated: hidden by default to save UI verts/draws).
     // Timed separately: hud records its window only, excl. the debug panel.
     const float hudOnlyMs = clk.ms();
-    drawDebugPanel(run, meta, snap, actions, curveK, fill, mouseCaptured, timers);
+    if (showDebug) drawDebugPanel(run, meta, snap, actions, curveK, fill, mouseCaptured, timers);
     timers.hud = hudOnlyMs;
 }
 
 void drawDebugPanel(const RunStats &run, const Meta &meta, const DebugSnapshot &snap, DebugActions actions,
                     float &curveK, float &fill, bool mouseCaptured, UiPanelMs &timers) {
     PanelClock clk;
-    ImGui::SetNextWindowPos(ImVec2(10, 150), ImGuiCond_FirstUseEver);
+    // Pinned top-right, 10px margin; NoMove keeps it fixed there.
+    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 10.0f, 10.0f), ImGuiCond_Always,
+                            ImVec2(1.0f, 0.0f));
     ImGui::SetNextWindowBgAlpha(0.6f);
-    ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_NoSavedSettings);
+    ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove);
 
     if (ImGui::CollapsingHeader("Tuning", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (actions.showDebug) ImGui::Checkbox("Show debug panel (B)", actions.showDebug);
         ImGui::SliderFloat("curveK", &curveK, 0.0f, 0.2f, "%.3f");
         ImGui::SliderFloat("fill", &fill, 0.0f, 1.0f, "%.2f");
         ImGui::TextDisabled("WASD move | Hold-click fire | P pause | L level | K die");
@@ -147,20 +150,52 @@ void drawDebugPanel(const RunStats &run, const Meta &meta, const DebugSnapshot &
                     static_cast<double>(snap.perfEntSubmit), static_cast<double>(snap.perfEntFlush),
                     static_cast<double>(snap.perfUi));
         if (snap.histN > 1) {
-            char totalLbl[48], updateLbl[48], renderLbl[48], uiLbl[48];
-            snprintf(totalLbl, sizeof(totalLbl), "total %.2f ms", static_cast<double>(snap.perfTotal));
-            snprintf(updateLbl, sizeof(updateLbl), "update %.2f ms", static_cast<double>(snap.perfUpdate));
+            // One combined 60-frame graph: total (white) + update (green) +
+            // render (yellow) + ui (cyan). Fixed scale (16.7ms budget, grown
+            // by the average) so one outlier spike can't flatten the rest.
+            float scale = snap.perfTotal * 1.5f;
+            if (scale < 16.7f) scale = 16.7f;
+            const ImVec2 gsize(ImGui::GetContentRegionAvail().x, 60.0f);
+            const ImVec2 gorg = ImGui::GetCursorScreenPos();
+            ImDrawList *gdl = ImGui::GetWindowDrawList();
+            gdl->AddRectFilled(gorg, ImVec2(gorg.x + gsize.x, gorg.y + gsize.y), IM_COL32(16, 16, 16, 255));
+            if (scale > 17.0f) {
+                const float by = gorg.y + gsize.y - gsize.y * 16.7f / scale;
+                gdl->AddLine(ImVec2(gorg.x, by), ImVec2(gorg.x + gsize.x, by), IM_COL32(255, 80, 80, 200));
+            }
+            const float *kSeries[4] = {snap.histTotal.data(), snap.histUpdate.data(), snap.histRender.data(),
+                                       snap.histUi.data()};
+            const ImU32 kCols[4] = {IM_COL32(255, 255, 255, 255), IM_COL32(80, 220, 100, 255),
+                                    IM_COL32(255, 210, 60, 255), IM_COL32(80, 200, 255, 255)};
+            // Light 3-tap smoothing so single-frame jitter doesn't dominate;
+            // stored history stays raw.
+            for (int s = 0; s < 4; ++s) {
+                float sm[DebugSnapshot::kPerfHist];
+                for (int i = 0; i < snap.histN; ++i) {
+                    const float a = kSeries[s][i > 0 ? i - 1 : i];
+                    const float b = kSeries[s][i];
+                    const float c = kSeries[s][i + 1 < snap.histN ? i + 1 : i];
+                    sm[i] = (a + b * 2.0f + c) * 0.25f;
+                }
+                for (int i = 1; i < snap.histN; ++i) {
+                    const float v0 = sm[i - 1] < scale ? sm[i - 1] : scale;
+                    const float v1 = sm[i] < scale ? sm[i] : scale;
+                    gdl->AddLine(ImVec2(gorg.x + gsize.x * (i - 1) / (snap.histN - 1),
+                                        gorg.y + gsize.y - gsize.y * v0 / scale),
+                                 ImVec2(gorg.x + gsize.x * i / (snap.histN - 1),
+                                        gorg.y + gsize.y - gsize.y * v1 / scale),
+                                 kCols[s], s == 0 ? 1.5f : 1.0f);
+                }
+            }
+            ImGui::Dummy(gsize);
+            ImGui::TextColored(ImVec4(1, 1, 1, 1), "total %.2f", static_cast<double>(snap.perfTotal));
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.31f, 0.86f, 0.39f, 1), "upd %.2f", static_cast<double>(snap.perfUpdate));
+            ImGui::SameLine();
             const float renderMs = snap.perfPlanet + snap.perfEntSubmit + snap.perfEntFlush;
-            snprintf(renderLbl, sizeof(renderLbl), "render %.2f ms", static_cast<double>(renderMs));
-            snprintf(uiLbl, sizeof(uiLbl), "ui %.2f ms", static_cast<double>(snap.perfUi));
-            ImGui::PlotLines("ms total", snap.histTotal.data(), snap.histN, 0, totalLbl, 0.0f, FLT_MAX,
-                             ImVec2(-1, 60));
-            ImGui::PlotLines("ms update", snap.histUpdate.data(), snap.histN, 0, updateLbl, 0.0f, FLT_MAX,
-                             ImVec2(-1, 40));
-            ImGui::PlotLines("ms render", snap.histRender.data(), snap.histN, 0, renderLbl, 0.0f, FLT_MAX,
-                             ImVec2(-1, 40));
-            ImGui::PlotLines("ms ui", snap.histUi.data(), snap.histN, 0, uiLbl, 0.0f, FLT_MAX,
-                             ImVec2(-1, 40));
+            ImGui::TextColored(ImVec4(1, 0.82f, 0.24f, 1), "ren %.2f", static_cast<double>(renderMs));
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.31f, 0.78f, 1, 1), "ui %.2f", static_cast<double>(snap.perfUi));
         } else {
             ImGui::TextDisabled("collecting frame history...");
         }
@@ -172,10 +207,11 @@ void drawDebugPanel(const RunStats &run, const Meta &meta, const DebugSnapshot &
                 ImGui::TableSetupColumn("ms");
                 ImGui::TableHeadersRow();
                 const UiPanelMs &p = snap.perfUiPanels;
-                const char *kNames[9] = {"snap", "frame", "hub", "hud", "debug",
-                                         "draft", "pause", "over", "edge"};
-                const float kVals[9] = {p.snap, p.frame, p.hub, p.hud, p.debug, p.draft, p.pause, p.over, p.edge};
-                for (int i = 0; i < 9; ++i) {
+                const char *kNames[11] = {"snap",  "newFrame", "render", "gl",  "hub",  "hud",
+                                          "debug", "draft",    "pause",  "over", "edge"};
+                const float kVals[11] = {p.snap,  p.newFrame, p.uiRender, p.uiGL, p.hub,  p.hud,
+                                         p.debug, p.draft,    p.pause,    p.over, p.edge};
+                for (int i = 0; i < 11; ++i) {
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
                     ImGui::TextUnformatted(kNames[i]);
