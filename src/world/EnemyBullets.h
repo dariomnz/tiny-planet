@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <glm/glm.hpp>
 
+#include "Config.h"
+
 struct EnemyBullet {
     glm::vec3 pos{0.0f};
     glm::vec3 vel{0.0f};
@@ -30,6 +32,6 @@ class EnemyBulletSystem {
     [[nodiscard]] bool full() const noexcept { return m_count >= m_items.size(); }
 
    private:
-    std::array<EnemyBullet, 400> m_items{};
+    std::array<EnemyBullet, config::kEnemyBulletCap> m_items{};
     std::size_t m_count = 0;
 };

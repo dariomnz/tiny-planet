@@ -220,7 +220,8 @@ void EnemySystem::update(float dt, const glm::vec2 &playerPos, EnemyBulletSystem
     }
 
     // Separation: overlapping enemies push apart so chasers/swarms don't
-    // stack into one blob (O(n^2), fine for n <= 256). Tanks/bosses push
+    // stack into one blob (O(n^2); Director keeps typical n small,
+    // caps are 10x headroom). Tanks/bosses push
     // through: only the other side moves.
     for (std::size_t i = 0; i < m_count; ++i) {
         for (std::size_t j = i + 1; j < m_count; ++j) {

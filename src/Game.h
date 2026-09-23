@@ -126,10 +126,46 @@ class Game {
     float m_fragMult = 1.0f;
     // M5: edge arrows (projView stored in renderScene, drawn in drawUi).
     glm::mat4 m_projView{1.0f};
-    std::array<ui::EdgeMarker, 64> m_edge{};
+    std::array<ui::EdgeMarker, 640> m_edge{};
     std::size_t m_edgeCount = 0;
     double m_lastTime = 0.0;
     double m_fpsLast = 0.0;
     int m_fpsFrames = 0;
     double m_workMsSum = 0.0;  // accumulated work time (no idle)
+    // Perf: last-frame ms per phase + 0.5s window sums for averages +
+    // 120-frame ring for the debug graph. All CPU time via glfwGetTime.
+    double m_perfUpdateMs = 0.0;
+    double m_perfSimMs = 0.0;
+    double m_perfCollideMs = 0.0;
+    double m_perfPlanetMs = 0.0;
+    double m_perfEntSubmitMs = 0.0;
+    double m_perfEntFlushMs = 0.0;
+    double m_perfUiMs = 0.0;
+    double m_perfTotalMs = 0.0;
+    double m_perfWinUpdate = 0.0;
+    double m_perfWinSim = 0.0;
+    double m_perfWinCollide = 0.0;
+    double m_perfWinPlanet = 0.0;
+    double m_perfWinSubmit = 0.0;
+    double m_perfWinFlush = 0.0;
+    double m_perfWinUi = 0.0;
+    double m_perfWinTotal = 0.0;
+    int m_perfWinFrames = 0;
+    float m_perfAvgUpdate = 0.0f;
+    float m_perfAvgSim = 0.0f;
+    float m_perfAvgCollide = 0.0f;
+    float m_perfAvgPlanet = 0.0f;
+    float m_perfAvgSubmit = 0.0f;
+    float m_perfAvgFlush = 0.0f;
+    float m_perfAvgUi = 0.0f;
+    float m_perfAvgTotal = 0.0f;
+    std::array<float, 120> m_perfHistTotal{};
+    std::array<float, 120> m_perfHistUpdate{};
+    std::array<float, 120> m_perfHistRender{};
+    std::array<float, 120> m_perfHistUi{};
+    int m_perfHistHead = 0;
+    int m_perfHistCount = 0;
+    double m_perfWinLast = 0.0;
+    void perfPushFrame();
+    void perfTickWindow(double now);
 };

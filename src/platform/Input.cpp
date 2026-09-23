@@ -44,8 +44,6 @@ void InputManager::requestCapture() {
     // Arm DISABLED. Inside a gesture it engages on the same click;
     // outside a gesture Emscripten defers it to the next canvas click.
     glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwGetInputMode(m_window, GLFW_CURSOR);
-    std::cout << "request Capture " << glfwGetInputMode(m_window, GLFW_CURSOR) << std::endl;
 }
 
 void InputManager::releaseCapture() {
@@ -57,7 +55,6 @@ void InputManager::releaseCapture() {
     m_lookDX = 0.0;
     m_lookDY = 0.0;
     if (m_window) glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-    std::cout << "release Capture " << glfwGetInputMode(m_window, GLFW_CURSOR) << std::endl;
 }
 
 bool InputManager::consumeExternalUnlock() noexcept {

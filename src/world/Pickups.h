@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <glm/glm.hpp>
 
+#include "Config.h"
+
 struct Gem {
     glm::vec2 pos{0.0f, 0.0f};
     float life = 0.0f;  // counts down from kGemDespawnSec
@@ -26,6 +28,6 @@ class GemSystem {
     [[nodiscard]] std::size_t size() const noexcept { return m_count; }
 
    private:
-    std::array<Gem, 300> m_items{};
+    std::array<Gem, config::kGemCap> m_items{};
     std::size_t m_count = 0;
 };

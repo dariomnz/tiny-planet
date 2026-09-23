@@ -76,4 +76,79 @@ void main() {
 }
 )GLSL";
 
+// Batched paths share one Frame UBO (binding 0), set once in begin().
+// Portable GLSL ES 3.0: no `binding=` qualifier here; C++ binds the
+// "Frame" block index to 0 via glUniformBlockBinding.
+inline constexpr std::string_view kFrameUbo = R"GLSL(
+layout(std140) uniform Frame {
+    mat4 projView;
+    vec2 playerPos;
+    float curveK;
+    float _pad;
+};
+)GLSL";
+
+// Instanced cubes: base mesh (divisor 0) + offset/scale/color (divisor 1).
+// One DrawInstanced per batch instead of one draw per entity.
+inline constexpr std::string_view kEntityInstVert = R"GLSL(#version 300 es
+precision highp float;
+layout (location = 0) in vec3 inPos;
+layout (location = 1) in vec3 inNormal;
+layout (location = 2) in vec3 inOffset;
+layout (location = 3) in float inScale;
+layout (location = 4) in vec3 inColor;
+layout(std140) uniform Frame {
+    mat4 projView;
+    vec2 playerPos;
+    float curveK;
+    float _pad;
+};
+out vec3 vNormal;
+out vec3 vColor;
+void main() {
+    vec4 world = vec4(inPos * inScale + inOffset, 1.0);
+    vec2 rel = world.xy - playerPos;
+    world.z -= curveK * dot(rel, rel);
+    gl_Position = projView * world;
+    vNormal = inNormal;
+    vColor = inColor;
+}
+)GLSL";
+
+inline constexpr std::string_view kEntityInstFrag = R"GLSL(#version 300 es
+precision mediump float;
+in vec3 vNormal;
+in vec3 vColor;
+out vec4 outColor;
+void main() {
+    vec3 lightDir = normalize(vec3(0.4, 0.5, 0.75));
+    float shade = 0.45 + 0.55 * max(dot(normalize(vNormal), lightDir), 0.0);
+    outColor = vec4(vColor * shade, 1.0);
+}
+)GLSL";
+
+// Merged unique triangles: arbitrary meshes, CPU-transformed, per-vertex color.
+inline constexpr std::string_view kEntityTriVert = R"GLSL(#version 300 es
+precision highp float;
+layout (location = 0) in vec3 inPos;
+layout (location = 1) in vec3 inNormal;
+layout (location = 2) in vec3 inColor;
+layout(std140) uniform Frame {
+    mat4 projView;
+    vec2 playerPos;
+    float curveK;
+    float _pad;
+};
+out vec3 vNormal;
+out vec3 vColor;
+void main() {
+    vec4 world = vec4(inPos, 1.0);
+    vec2 rel = world.xy - playerPos;
+    world.z -= curveK * dot(rel, rel);
+    gl_Position = projView * world;
+    vNormal = inNormal;
+    vColor = inColor;
+}
+)GLSL";
+
 }  // namespace shaders

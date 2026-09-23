@@ -18,7 +18,7 @@ constexpr float kProjLife = 2.0f;    // seconds until despawn
 constexpr float kProjSize = 0.25f;   // cube side length
 constexpr float kProjSpawnZ = 1.2f;  // spawn height (player chest)
 constexpr float kProjForwardOffset = 0.8f;
-constexpr std::size_t kProjMax = 256;  // M1: fixed player bullet pool cap
+constexpr std::size_t kProjMax = 2560;  // M1: fixed player bullet pool cap (10x)
 constexpr float kProjRadius = 0.25f;   // 2D collision radius
 
 // M1 — player base stats (mirrors docs/game-plan/03-upgrades.md).
@@ -29,7 +29,7 @@ constexpr float kPlayerRadius = 0.5f;
 constexpr float kPlayerInvulnSec = 0.5f;  // iframes after contact hit
 
 // M1 — Chaser enemy (mirrors docs/game-plan/04-enemies-scaling.md).
-constexpr std::size_t kEnemyCap = 256;
+constexpr std::size_t kEnemyCap = 2560;
 constexpr float kChaserHp = 20.0f;
 constexpr float kChaserDamage = 10.0f;  // contact
 constexpr float kChaserSpeed = 3.5f;
@@ -40,7 +40,7 @@ constexpr float kChaserRadius = 0.5f;
 constexpr float kXpBase = 5.0f;
 constexpr float kXpPow = 1.6f;
 constexpr float kXpMult = 3.0f;
-constexpr std::size_t kGemCap = 300;
+constexpr std::size_t kGemCap = 3000;
 constexpr float kGemMagnetRadius = 2.5f;  // base pickup radius (Boots scales it later)
 constexpr float kGemMagnetSpeed = 10.0f;  // fly-to-player speed inside radius
 constexpr float kGemDespawnSec = 20.0f;   // out-of-range gems despawn
@@ -65,7 +65,7 @@ inline int xpNeed(int level) {
 
 // M3 — Director + bullet hell (mirrors docs/game-plan/04-enemies-scaling.md).
 // t = run minutes (float).
-constexpr std::size_t kEnemyBulletCap = 400;
+constexpr std::size_t kEnemyBulletCap = 4000;
 constexpr float kEnemyBulletRadius = 0.3f;
 constexpr float kEnemyBulletLife = 6.0f;  // s; range-culls slow bullets
 constexpr float kEnemyBulletSpawnZ = 1.0f;

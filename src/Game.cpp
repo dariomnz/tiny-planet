@@ -576,13 +576,18 @@ void Game::frame() {
 
     if (m_state == UiState::Run) {
         try {
+            const double tU0 = glfwGetTime();
             update(dt);
+            m_perfUpdateMs = (glfwGetTime() - tU0) * 1000.0;
         } catch (const std::exception &e) {
             std::cerr << "update: " << e.what() << std::endl;
         } catch (...) {
             std::cerr << "update: unknown error" << std::endl;
         }
     } else {
+        m_perfUpdateMs = 0.0;
+        m_perfSimMs = 0.0;
+        m_perfCollideMs = 0.0;
         // Frozen world: keep FPS/MS window alive so Hub HUD doesn't stall.
         ++m_fpsFrames;
         if (now - m_fpsLast >= 0.5) {
@@ -596,21 +601,31 @@ void Game::frame() {
     }
 
     m_window.applyViewport();
+    double tR0 = 0.0, tR1 = 0.0, tUi0 = 0.0, tUi1 = 0.0;
     try {
+        tR0 = glfwGetTime();
         renderScene();
+        tR1 = glfwGetTime();
     } catch (const std::exception &e) {
         std::cerr << "render: " << e.what() << std::endl;
     } catch (...) {
         std::cerr << "render: unknown error" << std::endl;
     }
     try {
+        tUi0 = glfwGetTime();
         drawUi();
+        tUi1 = glfwGetTime();
     } catch (const std::exception &e) {
         std::cerr << "ui: " << e.what() << std::endl;
     } catch (...) {
         std::cerr << "ui: unknown error" << std::endl;
     }
-    m_workMsSum += (glfwGetTime() - t0) * 1000.0;
+    m_perfUiMs = (tUi1 - tUi0) * 1000.0;
+    const double tEnd = glfwGetTime();
+    m_perfTotalMs = (tEnd - t0) * 1000.0;
+    m_workMsSum += (tEnd - t0) * 1000.0;
+    perfPushFrame();
+    perfTickWindow(tEnd);
     m_window.swapBuffers();
 }
 
@@ -654,17 +669,26 @@ void Game::update(float dt) {
         m_fireTimer = 1.0f / m_fireRate;
     }
     steerMissiles(dt);  // M5: homing turn before straight-line integration
+    const double tSim0 = glfwGetTime();
     m_projectiles.update(dt);
     // M3/M5: Director (budget/interval/bosses, NG+ mults) -> enemy AI -> bullets.
     const float timeMin = m_run.timerSec / 60.0f;
     m_director.update(dt, m_run.timerSec, m_player.pos(), m_enemies, m_ngHp, m_ngDmg);
     m_enemies.update(dt, m_player.pos(), m_enemyBullets, timeMin);
     m_enemyBullets.update(dt, m_player.pos());
+    const double tSim1 = glfwGetTime();
+    const double tCol0 = glfwGetTime();
     collideBulletsEnemies();
-    if (m_state != UiState::Run) return;  // victory ended the run mid-collision
+    if (m_state != UiState::Run) {
+        m_perfSimMs = (tSim1 - tSim0) * 1000.0;
+        m_perfCollideMs = (glfwGetTime() - tCol0) * 1000.0;
+        return;  // victory ended the run mid-collision
+    }
     collideEnemiesPlayer(dt);
     collideEnemyBulletsPlayer();
     refreshBossBar();
+    m_perfSimMs = (tSim1 - tSim0) * 1000.0;
+    m_perfCollideMs = (glfwGetTime() - tCol0) * 1000.0;
     m_gems.update(dt, m_player.pos(), m_magnetRadius);
     collectGems();  // may open the draft; the rest of this frame still runs once (harmless)
 
@@ -727,7 +751,8 @@ void Game::update(float dt) {
 
 void Game::collideBulletsEnemies() {
     // 2D circle collisions (xy only, curved z is visual). O(n*m) is fine
-    // for n,m < 300 at 60fps (see 05-architecture). No allocs.
+    // for n,m < 3000 at 60fps the bullet-enemy loop is the hot path;
+    // Director keeps typical alive counts low, caps are headroom. No allocs.
     // M5: heavy-sized bullets (m_bulletRadius) + crit rolls (x2).
     auto *bullets = m_projectiles.data();
     auto *enemies = m_enemies.data();
@@ -858,45 +883,42 @@ void Game::renderScene() {
     // Planet (grid re-centered under the player with per-cell snap).
     const float snapX = std::floor(m_player.pos().x / config::kCell + 0.5f) * config::kCell;
     const float snapY = std::floor(m_player.pos().y / config::kCell + 0.5f) * config::kCell;
+    const double tPlanet0 = glfwGetTime();
     m_planet.draw(proj * view, m_player.pos(), {snapX, snapY}, m_curveK, m_fill, {0.2f, 1.0f, 0.4f},
                   config::kFogDensity);
+    const double tPlanet1 = glfwGetTime();
+    m_perfPlanetMs = (tPlanet1 - tPlanet0) * 1000.0;
 
-    // Player + nose + projectiles + enemies (same curved shader).
+    // Player + nose + projectiles + enemies (batched flushes).
+    const double tSubmit0 = glfwGetTime();
     m_entities.begin(proj * view, m_player.pos(), m_curveK);
     glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(m_player.pos().x, m_player.pos().y, 0.0f));
     model = glm::rotate(model, m_player.yaw(), glm::vec3(0.0f, 0.0f, 1.0f));
     m_entities.drawPlayer(model, {1.0f, 0.25f, 0.2f});
     m_entities.drawNose(model, {1.0f, 0.85f, 0.2f});
     m_entities.drawProjectiles(m_projectiles.data(), m_projectiles.size(), {0.3f, 0.8f, 1.0f});
-    // Gems as small green cubes (stack array: no heap allocs per frame).
-    {
-        const std::size_t n = m_gems.size();
-        glm::vec2 gpos[300];
-        for (std::size_t i = 0; i < n; ++i) gpos[i] = m_gems.data()[i].pos;
-        if (n > 0) m_entities.drawGems(gpos, n, {0.3f, 1.0f, 0.4f});
-    }
-    // Enemies as colored cubes (stack arrays: no heap allocs per frame).
-    // Scale derives from the per-type radius (chaser 0.5 -> 0.8 to match M1).
-    // M5: elites read yellow (radius already x1.3 from make()).
-    {
-        const std::size_t n = m_enemies.size();
-        // Fixed cap 256: bounded stack copies, refreshed every frame.
-        glm::vec2 epos[256];
-        float escale[256];
-        glm::vec3 ecolor[256];
-        for (std::size_t i = 0; i < n; ++i) {
-            const Enemy &e = m_enemies.data()[i];
-            epos[i] = e.pos;
-            escale[i] = e.radius * 1.6f;
-            ecolor[i] = e.elite ? glm::vec3(1.0f, 0.85f, 0.2f) : enemyColor(e.type);
-        }
-        if (n > 0) m_entities.drawEnemies(epos, escale, ecolor, n);
+    // Gems as small green cubes. No intermediate stack copy: single-element
+    // submits append to the instance batch (no GL calls until end()).
+    for (std::size_t i = 0; i < m_gems.size(); ++i)
+        m_entities.drawGems(&m_gems.data()[i].pos, 1, {0.3f, 1.0f, 0.4f});
+    // Enemies as colored cubes. Scale derives from the per-type radius
+    // (chaser 0.5 -> 0.8 to match M1). M5: elites read yellow.
+    for (std::size_t i = 0; i < m_enemies.size(); ++i) {
+        const Enemy &e = m_enemies.data()[i];
+        const float s = e.radius * 1.6f;
+        const glm::vec3 c = e.elite ? glm::vec3(1.0f, 0.85f, 0.2f) : enemyColor(e.type);
+        m_entities.drawEnemies(&e.pos, &s, &c, 1);
     }
     // M5: orbitals as cyan cubes reusing the gem mesh.
     if (m_orbCount > 0) m_entities.drawGems(m_orbPos, static_cast<std::size_t>(m_orbCount), {0.3f, 1.0f, 1.0f});
     // M3: enemy bullets (magenta), same curved shader + projectile mesh.
     if (m_enemyBullets.size() > 0)
         m_entities.drawEnemyBullets(m_enemyBullets.data(), m_enemyBullets.size(), {1.0f, 0.2f, 0.5f});
+    const double tSubmit1 = glfwGetTime();
+    m_perfEntSubmitMs = (tSubmit1 - tSubmit0) * 1000.0;
+    const double tFlush0 = glfwGetTime();
+    m_entities.end();
+    m_perfEntFlushMs = (glfwGetTime() - tFlush0) * 1000.0;
     refreshEdgeMarkers();
 }
 

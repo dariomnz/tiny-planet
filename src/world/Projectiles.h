@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <glm/glm.hpp>
 
+#include "Config.h"
+
 struct Projectile {
     glm::vec3 pos{0.0f};
     glm::vec3 vel{0.0f};
@@ -28,6 +30,6 @@ class ProjectileSystem {
      [[nodiscard]] bool full() const noexcept { return m_count >= m_items.size(); }
 
     private:
-     std::array<Projectile, 256> m_items{};
+     std::array<Projectile, config::kProjMax> m_items{};
      std::size_t m_count = 0;
 };

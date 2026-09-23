@@ -125,6 +125,33 @@ void drawDebugPanel(const RunStats &run, const Meta &meta, const DebugSnapshot &
                     static_cast<double>(run.timerSec), static_cast<double>(snap.timeMin), snap.fbW, snap.fbH);
     }
 
+    if (ImGui::CollapsingHeader("Perf (CPU ms, 0.5s avg)", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Text("total %.2f  update %.2f (sim %.2f collide %.2f)", static_cast<double>(snap.perfTotal),
+                    static_cast<double>(snap.perfUpdate), static_cast<double>(snap.perfSim),
+                    static_cast<double>(snap.perfCollide));
+        ImGui::Text("planet %.2f  submit %.2f  flush %.2f  ui %.2f", static_cast<double>(snap.perfPlanet),
+                    static_cast<double>(snap.perfEntSubmit), static_cast<double>(snap.perfEntFlush),
+                    static_cast<double>(snap.perfUi));
+        if (snap.histN > 1) {
+            char totalLbl[48], updateLbl[48], renderLbl[48], uiLbl[48];
+            snprintf(totalLbl, sizeof(totalLbl), "total %.2f ms", static_cast<double>(snap.perfTotal));
+            snprintf(updateLbl, sizeof(updateLbl), "update %.2f ms", static_cast<double>(snap.perfUpdate));
+            const float renderMs = snap.perfPlanet + snap.perfEntSubmit + snap.perfEntFlush;
+            snprintf(renderLbl, sizeof(renderLbl), "render %.2f ms", static_cast<double>(renderMs));
+            snprintf(uiLbl, sizeof(uiLbl), "ui %.2f ms", static_cast<double>(snap.perfUi));
+            ImGui::PlotLines("ms total", snap.histTotal.data(), snap.histN, 0, totalLbl, 0.0f, FLT_MAX,
+                             ImVec2(-1, 60));
+            ImGui::PlotLines("ms update", snap.histUpdate.data(), snap.histN, 0, updateLbl, 0.0f, FLT_MAX,
+                             ImVec2(-1, 40));
+            ImGui::PlotLines("ms render", snap.histRender.data(), snap.histN, 0, renderLbl, 0.0f, FLT_MAX,
+                             ImVec2(-1, 40));
+            ImGui::PlotLines("ms ui", snap.histUi.data(), snap.histN, 0, uiLbl, 0.0f, FLT_MAX,
+                             ImVec2(-1, 40));
+        } else {
+            ImGui::TextDisabled("collecting frame history...");
+        }
+    }
+
     if (ImGui::CollapsingHeader("Player", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Text("Pos (%.1f, %.1f)  yaw %.2f", static_cast<double>(snap.playerPos.x),
                     static_cast<double>(snap.playerPos.y), static_cast<double>(snap.playerYaw));

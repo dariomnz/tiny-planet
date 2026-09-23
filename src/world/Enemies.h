@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <glm/glm.hpp>
 
+#include "Config.h"
+
 class EnemyBulletSystem;
 
 // M3/M5 enemy types (docs/game-plan/04-enemies-scaling.md table).
@@ -48,6 +50,6 @@ class EnemySystem {
     [[nodiscard]] std::size_t size() const noexcept { return m_count; }
 
    private:
-    std::array<Enemy, 256> m_items{};
+    std::array<Enemy, config::kEnemyCap> m_items{};
     std::size_t m_count = 0;
 };

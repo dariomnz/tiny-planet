@@ -78,6 +78,23 @@ struct DebugSnapshot {
     int fbW = 0;
     int fbH = 0;
     UiState state = UiState::Hub;
+
+    // Perf: 0.5s-window averages (ms) + 120-frame history for the graph.
+    // update = sim + collide + misc; render = planet + entSubmit + entFlush.
+    float perfUpdate = 0.0f;
+    float perfSim = 0.0f;  // projectiles/director/enemies/bullets
+    float perfCollide = 0.0f;  // bullet-vs-enemy + player hits (hot path)
+    float perfPlanet = 0.0f;
+    float perfEntSubmit = 0.0f;  // CPU batch build
+    float perfEntFlush = 0.0f;   // VBO upload + draws
+    float perfUi = 0.0f;
+    float perfTotal = 0.0f;
+    static constexpr int kPerfHist = 120;
+    std::array<float, kPerfHist> histTotal{};
+    std::array<float, kPerfHist> histUpdate{};
+    std::array<float, kPerfHist> histRender{};
+    std::array<float, kPerfHist> histUi{};
+    int histN = 0;
 };
 
 // Cheat/test actions owned by Game, invoked from the debug panel.

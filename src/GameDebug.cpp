@@ -108,6 +108,24 @@ DebugSnapshot Game::buildDebugSnapshot() const {
     s.fbW = m_window.fbWidth();
     s.fbH = m_window.fbHeight();
     s.state = m_state;
+
+    s.perfUpdate = m_perfAvgUpdate;
+    s.perfSim = m_perfAvgSim;
+    s.perfCollide = m_perfAvgCollide;
+    s.perfPlanet = m_perfAvgPlanet;
+    s.perfEntSubmit = m_perfAvgSubmit;
+    s.perfEntFlush = m_perfAvgFlush;
+    s.perfUi = m_perfAvgUi;
+    s.perfTotal = m_perfAvgTotal;
+    // Unwrap ring (oldest -> newest) for ImGui::PlotLines.
+    s.histN = m_perfHistCount;
+    for (int i = 0; i < m_perfHistCount; ++i) {
+        const int idx = (m_perfHistHead - m_perfHistCount + i + 120 * 2) % 120;
+        s.histTotal[static_cast<std::size_t>(i)] = m_perfHistTotal[static_cast<std::size_t>(idx)];
+        s.histUpdate[static_cast<std::size_t>(i)] = m_perfHistUpdate[static_cast<std::size_t>(idx)];
+        s.histRender[static_cast<std::size_t>(i)] = m_perfHistRender[static_cast<std::size_t>(idx)];
+        s.histUi[static_cast<std::size_t>(i)] = m_perfHistUi[static_cast<std::size_t>(idx)];
+    }
     return s;
 }
 
@@ -184,3 +202,43 @@ void Game::spawnEnemy(int typeIdx) {
 }
 
 void Game::addMinute() { m_run.timerSec += 60.0f; }
+
+void Game::perfPushFrame() {
+    const float renderMs =
+        static_cast<float>(m_perfPlanetMs + m_perfEntSubmitMs + m_perfEntFlushMs);
+    m_perfHistTotal[m_perfHistHead] = static_cast<float>(m_perfTotalMs);
+    m_perfHistUpdate[m_perfHistHead] = static_cast<float>(m_perfUpdateMs);
+    m_perfHistRender[m_perfHistHead] = renderMs;
+    m_perfHistUi[m_perfHistHead] = static_cast<float>(m_perfUiMs);
+    m_perfHistHead = (m_perfHistHead + 1) % 120;
+    if (m_perfHistCount < 120) ++m_perfHistCount;
+
+    m_perfWinUpdate += m_perfUpdateMs;
+    m_perfWinSim += m_perfSimMs;
+    m_perfWinCollide += m_perfCollideMs;
+    m_perfWinPlanet += m_perfPlanetMs;
+    m_perfWinSubmit += m_perfEntSubmitMs;
+    m_perfWinFlush += m_perfEntFlushMs;
+    m_perfWinUi += m_perfUiMs;
+    m_perfWinTotal += m_perfTotalMs;
+    ++m_perfWinFrames;
+}
+
+void Game::perfTickWindow(double now) {
+    if (m_perfWinLast <= 0.0) m_perfWinLast = now;
+    if (now - m_perfWinLast < 0.5 || m_perfWinFrames <= 0) return;
+    const double n = static_cast<double>(m_perfWinFrames);
+    m_perfAvgUpdate = static_cast<float>(m_perfWinUpdate / n);
+    m_perfAvgSim = static_cast<float>(m_perfWinSim / n);
+    m_perfAvgCollide = static_cast<float>(m_perfWinCollide / n);
+    m_perfAvgPlanet = static_cast<float>(m_perfWinPlanet / n);
+    m_perfAvgSubmit = static_cast<float>(m_perfWinSubmit / n);
+    m_perfAvgFlush = static_cast<float>(m_perfWinFlush / n);
+    m_perfAvgUi = static_cast<float>(m_perfWinUi / n);
+    m_perfAvgTotal = static_cast<float>(m_perfWinTotal / n);
+    m_perfWinUpdate = m_perfWinSim = m_perfWinCollide = 0.0;
+    m_perfWinPlanet = m_perfWinSubmit = m_perfWinFlush = 0.0;
+    m_perfWinUi = m_perfWinTotal = 0.0;
+    m_perfWinFrames = 0;
+    m_perfWinLast = now;
+}

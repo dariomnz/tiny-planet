@@ -19,8 +19,13 @@ class VertexArray {
     static void unbind();
     // Declares layout location=index, float component count, stride/offset in bytes.
     void attrib(GLuint index, GLint size, GLsizei stride, std::size_t offset) const;
+    // Maplex-style: attach a VertexBuffer using its BufferLayout.
+    // Handles float attrs via Pointer, int attrs via IPointer, plus divisor.
+    void addVertexBuffer(const class VertexBuffer &vb);
+    void setIndexBuffer(const class IndexBuffer &ib);
     [[nodiscard]] GLuint id() const noexcept { return m_id; }
 
    private:
     GLuint m_id = 0;
+    GLuint m_attribIndex = 0;
 };
